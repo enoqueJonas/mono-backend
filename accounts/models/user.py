@@ -3,7 +3,7 @@ from django.contrib.auth.models import PermissionsMixin
 from django.db import models
 from accounts.utils.phone import normalize_mz_phone
 from ..managers import UserManager
-from ...core.models.base import BaseModel
+from core.models.base import BaseModel
 
 
 class User(BaseModel, AbstractBaseUser, PermissionsMixin):
@@ -16,8 +16,6 @@ class User(BaseModel, AbstractBaseUser, PermissionsMixin):
     is_superuser = models.BooleanField(default=False)
 
     last_login = models.DateTimeField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     objects = UserManager()
 
