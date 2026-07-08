@@ -3,9 +3,10 @@ from django.contrib.auth.models import PermissionsMixin
 from django.db import models
 from accounts.utils.phone import normalize_mz_phone
 from ..managers import UserManager
+from ...core.models.base import BaseModel
 
 
-class User(AbstractBaseUser, PermissionsMixin):
+class User(BaseModel, AbstractBaseUser, PermissionsMixin):
     first_name = models.CharField(max_length=30, blank=True)
     last_name = models.CharField(max_length=30, blank=True)
     phone_number = models.CharField(max_length=16, unique=True)

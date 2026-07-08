@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "contributions",
     "wallets",
     "blockchain",
+    "core",
 ]
 
 MIDDLEWARE = [
