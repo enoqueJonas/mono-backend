@@ -14,31 +14,45 @@ class Contribution(BaseModel):
         MANUAL = "MANUAL", "Manual"
         MOBILE_WALLET = "MOBILE_WALLET", "Mobile Wallet"
 
-    group = models.ForeignKey(
-        "groups.Group",
-        on_delete=models.CASCADE,
-        related_name="contributions",
-    )
     member = models.ForeignKey(
         "groups.GroupMember",
         on_delete=models.CASCADE,
         related_name="contributions",
     )
+
     amount = models.DecimalField(max_digits=12, decimal_places=2)
+
     source = models.CharField(
         max_length=20,
         choices=Source.choices,
         default=Source.MANUAL,
     )
+
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.CONFIRMED,
     )
-    reference = models.CharField(max_length=100, blank=True)
+
+    contribution_period = models.DateField()
+
+    reference = models.CharField(max_length=100, unique=True)
 
     class Meta:
+
         db_table = "contributions"
 
+        constraints = [
+
+            models.UniqueConstraint(
+
+                fields=["member", "contribution_period"],
+
+                name="unique_member_contribution_period",
+
+            )
+
+        ]
+
     def __str__(self):
-        return f"{self.member} - {self.amount}"
+        return f"{self.member} - {self.amount} - {self.contribution_period}"
