@@ -4,7 +4,10 @@ from rest_framework.views import APIView
 
 from core.responses import success
 from groups.serializers.create_group import CreateGroupSerializer
-from groups.serializers.group import GroupSerializer
+from groups.serializers.group import (
+    GroupDetailSerializer,
+    GroupSerializer,
+)
 from groups.services.group_service import GroupService
 from groups.selectors.group_selector import GroupSelector
 
@@ -52,6 +55,25 @@ class GroupDetailView(APIView):
         if group is None:
             raise GroupNotFound()
 
+        statistics = GroupSelector.get_group_statistics(
+            group=group,
+        )
+
         return success(
-            data=GroupSerializer(group).data
+            data=GroupDetailSerializer(
+                group,
+                context={"statistics": statistics},
+            ).data
+        )
+
+    def delete(self, request, group_id):
+
+        group = GroupService.archive_group(
+            group_id=group_id,
+            archived_by=request.user,
+        )
+
+        return success(
+            data=GroupSerializer(group).data,
+            message="Group archived successfully.",
         )

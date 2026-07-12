@@ -17,6 +17,10 @@ class CreateGroupSettingsSerializer(serializers.Serializer):
     )
     requires_consensus = serializers.BooleanField(default=True)
     allow_manual_contributions = serializers.BooleanField(default=False)
+    currency = serializers.CharField(
+        max_length=3,
+        default="MZN",
+    )
 
 
 class CreateGroupSerializer(serializers.Serializer):

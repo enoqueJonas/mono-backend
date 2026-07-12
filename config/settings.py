@@ -34,6 +34,9 @@ DEBUG = env.bool("DEBUG", default=False)
 
 ALLOWED_HOSTS = []
 
+# DID Settings
+DID_KEY_ENCRYPTION_KEY = env("DID_KEY_ENCRYPTION_KEY")
+
 
 # Application definition
 
@@ -52,6 +55,7 @@ INSTALLED_APPS = [
     "wallets",
     "blockchain",
     "core",
+    "identity",
 ]
 
 MIDDLEWARE = [

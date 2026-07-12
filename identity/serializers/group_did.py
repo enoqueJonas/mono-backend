@@ -1,0 +1,23 @@
+from rest_framework import serializers
+
+from identity.models import GroupDID
+
+
+class GroupDIDSerializer(serializers.ModelSerializer):
+    verification_method_id = serializers.CharField(
+        read_only=True,
+    )
+
+    class Meta:
+        model = GroupDID
+        fields = (
+            "id",
+            "did",
+            "method",
+            "status",
+            "public_key_multibase",
+            "verification_method_id",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields

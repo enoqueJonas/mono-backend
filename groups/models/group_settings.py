@@ -20,6 +20,12 @@ class GroupSettings(BaseModel):
         related_name="settings",
     )
     contribution_amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    currency = models.CharField(
+        max_length=3,
+        default="MZN",
+    )
+
     contribution_frequency = models.CharField(
         max_length=20,
         choices=ContributionFrequency.choices,
@@ -37,3 +43,6 @@ class GroupSettings(BaseModel):
 
     def __str__(self):
         return f"Settings for {self.group.name}"
+
+    def validate_currency(self, value):
+        return value.upper()

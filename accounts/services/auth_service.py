@@ -4,6 +4,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import User
 from core.exceptions import DomainException
+from identity.services.did_service import DIDService
 
 
 class InvalidCredentials(DomainException):
@@ -27,6 +28,8 @@ class AuthService:
             password=password,
             **data,
         )
+
+        DIDService.create_for_user(user=user)
 
         return user
 

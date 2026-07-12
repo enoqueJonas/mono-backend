@@ -18,9 +18,18 @@ class GroupMemberListCreateView(APIView):
             user=request.user,
         )
 
-        members = GroupMember.objects.select_related("user").filter(
-            group_id=group_id
-        ).order_by("joined_at")
+        members = (
+            GroupMember.objects
+            .select_related("user")
+            .filter(
+                group_id=group_id,
+                status__in=[
+                    GroupMember.Status.ACTIVE,
+                    GroupMember.Status.SUSPENDED,
+                ],
+            )
+            .order_by("joined_at")
+        )
 
         return success(
             data=GroupMemberSerializer(members, many=True).data
@@ -40,4 +49,20 @@ class GroupMemberListCreateView(APIView):
             data=GroupMemberSerializer(member).data,
             message="Member added successfully.",
             status_code=201,
+        )
+
+
+class GroupMemberDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, group_id, group_member_id):
+        member = GroupService.remove_member(
+            group_id=group_id,
+            group_member_id=group_member_id,
+            removed_by=request.user,
+        )
+
+        return success(
+            data=GroupMemberSerializer(member).data,
+            message="Member removed successfully.",
         )

@@ -75,6 +75,7 @@ class ContributionService:
         contribution = Contribution.objects.create(
             member=member,
             amount=received_amount,
+            currency=group.settings.currency,
             contribution_period=data["contribution_period"],
             reference=reference,
             source=Contribution.Source.MANUAL,
