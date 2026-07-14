@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "blockchain",
     "core",
     "identity",
+    "credentials",
 ]
 
 MIDDLEWARE = [

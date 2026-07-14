@@ -26,4 +26,8 @@ urlpatterns = [
         "api/v1/identity/",
         include("identity.urls"),
     ),
+    path(
+        "api/v1/credentials/",
+        include("credentials.urls"),
+    ),
 ]
