@@ -1,0 +1,19 @@
+dotenv: .env
+
+dependencies:
+  - OpenZeppelin/openzeppelin-contracts@4.9.6
+
+compiler:
+  solc:
+    version: 0.8.20
+    optimizer:
+      enabled: true
+      runs: 200
+    remappings:
+      - "@openzeppelin=OpenZeppelin/openzeppelin-contracts@4.9.6"
+
+networks:
+  default: development
+
+wallets:
+  from_key: ${PRIVATE_KEY}

@@ -21,6 +21,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load .env
 env = environ.Env()
 environ.Env.read_env(BASE_DIR / ".env")
+env = environ.Env(
+    BLOCKCHAIN_RPC_URL=(str, "http://127.0.0.1:8545"),
+    BLOCKCHAIN_CHAIN_ID=(int, 1337),
+    CREDENTIAL_REGISTRY_ADDRESS=(str, ""),
+)
+
+
+BLOCKCHAIN_RPC_URL = env("BLOCKCHAIN_RPC_URL")
+BLOCKCHAIN_CHAIN_ID = env("BLOCKCHAIN_CHAIN_ID")
+CREDENTIAL_REGISTRY_ADDRESS = env("CREDENTIAL_REGISTRY_ADDRESS")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
