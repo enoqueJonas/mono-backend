@@ -2,72 +2,71 @@ import json
 from pathlib import Path
 from typing import Any
 
-from django.conf import settings
-from web3 import Web3
-from web3.contract import Contract
+from web3 import HTTPProvider, Web3
 
+from blockchain.domain.blockchain_config import (
+    BlockchainConfig,
+)
+from blockchain.domain.blockchain_receipt import (
+    BlockchainReceipt,
+)
+from blockchain.domain.credential_anchor_request import (
+    CredentialAnchorRequest,
+)
 from blockchain.exceptions import (
     BlockchainConnectionError,
-    ContractNotDeployedError,
-    InvalidContractAddressError,
+    CredentialAlreadyAnchored,
+)
+from blockchain.services.transaction_service import (
+    TransactionService,
 )
 
 
 class CredentialRegistryClient:
     def __init__(
         self,
-        rpc_url: str | None = None,
-        contract_address: str | None = None,
+        config: BlockchainConfig,
     ) -> None:
-        self.rpc_url = (
-            rpc_url
-            or settings.BLOCKCHAIN_RPC_URL
-        )
-
-        self.contract_address = (
-            contract_address
-            or settings.CREDENTIAL_REGISTRY_ADDRESS
-        )
+        self.config = config
 
         self.web3 = Web3(
-            Web3.HTTPProvider(self.rpc_url)
+            HTTPProvider(config.rpc_url)
         )
 
-        self._validate_connection()
-        self.contract = self._build_contract()
-
-    def _validate_connection(self) -> None:
         if not self.web3.is_connected():
             raise BlockchainConnectionError(
-                f"Unable to connect to blockchain RPC: "
-                f"{self.rpc_url}"
+                f"Unable to connect to blockchain node: "
+                f"{config.rpc_url}"
             )
 
-    def _build_contract(self) -> Contract:
-        if not Web3.is_address(
-            self.contract_address
-        ):
-            raise InvalidContractAddressError(
-                "CREDENTIAL_REGISTRY_ADDRESS is invalid."
-            )
-
-        checksum_address = Web3.to_checksum_address(
-            self.contract_address
+        contract_address = Web3.to_checksum_address(
+            config.contract_address
         )
 
-        contract_code = self.web3.eth.get_code(
-            checksum_address
+        account_address = Web3.to_checksum_address(
+            config.account.address
         )
 
-        if contract_code in (b"", b"\x00"):
-            raise ContractNotDeployedError(
-                "No contract code was found at "
-                f"{checksum_address}."
-            )
+        self.config = BlockchainConfig(
+            rpc_url=config.rpc_url,
+            chain_id=config.chain_id,
+            contract_address=contract_address,
+            account=type(config.account)(
+                address=account_address,
+                private_key=config.account.private_key,
+            ),
+        )
 
-        return self.web3.eth.contract(
-            address=checksum_address,
-            abi=self._load_abi(),
+        abi = self._load_abi()
+
+        self.contract = self.web3.eth.contract(
+            address=contract_address,
+            abi=abi,
+        )
+
+        self.transaction_service = TransactionService(
+            web3=self.web3,
+            config=self.config,
         )
 
     @staticmethod
@@ -81,15 +80,26 @@ class CredentialRegistryClient:
         with abi_path.open(
             "r",
             encoding="utf-8",
-        ) as abi_file:
-            return json.load(abi_file)
+        ) as file:
+            content = json.load(file)
+
+        # Supports either a raw ABI file or the full
+        # Brownie contract artefact.
+        if isinstance(content, dict) and "abi" in content:
+            return content["abi"]
+
+        if isinstance(content, list):
+            return content
+
+        raise ValueError(
+            "CredentialRegistry ABI file has an "
+            "unsupported structure."
+        )
 
     def credential_exists(
         self,
         credential_hash: bytes,
     ) -> bool:
-        self._validate_hash(credential_hash)
-
         return bool(
             self.contract.functions
             .credentialExists(credential_hash)
@@ -100,8 +110,6 @@ class CredentialRegistryClient:
         self,
         credential_hash: bytes,
     ) -> dict[str, Any]:
-        self._validate_hash(credential_hash)
-
         (
             exists,
             revoked,
@@ -114,26 +122,30 @@ class CredentialRegistryClient:
         )
 
         return {
-            "exists": exists,
-            "revoked": revoked,
-            "anchored_at": anchored_at,
+            "exists": bool(exists),
+            "revoked": bool(revoked),
+            "anchored_at": int(anchored_at),
             "anchored_by": anchored_by,
         }
 
-    @staticmethod
-    def _validate_hash(
-        credential_hash: bytes,
-    ) -> None:
-        if not isinstance(
-            credential_hash,
-            bytes,
+    def register_credential_hash(
+        self,
+        request: CredentialAnchorRequest,
+    ) -> BlockchainReceipt:
+        if self.credential_exists(
+            request.credential_hash
         ):
-            raise TypeError(
-                "Credential hash must be bytes."
+            raise CredentialAlreadyAnchored(
+                "Credential hash is already anchored."
             )
 
-        if len(credential_hash) != 32:
-            raise ValueError(
-                "Credential hash must contain exactly "
-                "32 bytes."
+        function = (
+            self.contract.functions
+            .registerCredentialHash(
+                request.credential_hash
             )
+        )
+
+        return self.transaction_service.execute(
+            function
+        )

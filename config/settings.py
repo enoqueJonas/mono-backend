@@ -31,6 +31,8 @@ env = environ.Env(
 BLOCKCHAIN_RPC_URL = env("BLOCKCHAIN_RPC_URL")
 BLOCKCHAIN_CHAIN_ID = env("BLOCKCHAIN_CHAIN_ID")
 CREDENTIAL_REGISTRY_ADDRESS = env("CREDENTIAL_REGISTRY_ADDRESS")
+BLOCKCHAIN_PRIVATE_KEY = env("BLOCKCHAIN_PRIVATE_KEY",)
+BLOCKCHAIN_ACCOUNT_ADDRESS = env("BLOCKCHAIN_ACCOUNT_ADDRESS",)
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
