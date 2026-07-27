@@ -17,8 +17,14 @@ contract CredentialRegistry {
         address indexed anchoredBy
     );
 
+    event CredentialRevoked(
+        bytes32 indexed credentialHash,
+        address indexed revokedBy
+    );
+
     error CredentialAlreadyAnchored();
     error CredentialNotFound();
+    error CredentialAlreadyRevoked();
 
     function registerCredentialHash(bytes32 credentialHash) external {
         if (anchors[credentialHash].exists) {
@@ -33,6 +39,22 @@ contract CredentialRegistry {
         });
 
         emit CredentialAnchored(credentialHash, msg.sender);
+    }
+
+    function revokeCredential(bytes32 credentialHash) external {
+        CredentialAnchor storage anchor = anchors[credentialHash];
+
+        if (!anchor.exists) {
+            revert CredentialNotFound();
+        }
+
+        if (anchor.revoked) {
+            revert CredentialAlreadyRevoked();
+        }
+
+        anchor.revoked = true;
+
+        emit CredentialRevoked(credentialHash, msg.sender);
     }
 
     function credentialExists(
