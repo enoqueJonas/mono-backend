@@ -59,3 +59,7 @@ class CredentialHolderNotFound(DomainException):
     default_message = (
         "The selected group member was not found."
     )
+
+
+class CredentialIssuanceError(Exception):
+    """Raised when a credential cannot be issued."""

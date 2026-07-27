@@ -25,6 +25,9 @@ from credentials.services.credential_builder import (
 from credentials.services.credential_signer import (
     CredentialSigner,
 )
+from credentials.application.services.issue_credential_service import (
+    IssueCredentialService,
+)
 from credentials.utils.canonical_json import calculate_sha256
 from groups.models import GroupMember
 from identity.models import GroupDID, UserDID
@@ -269,9 +272,9 @@ class CredentialService:
         if issuer_membership is None:
             raise NotCredentialIssuer()
 
-        return cls.issue_contribution_credential(
-            group_member=holder_membership,
-            issued_by=issuer_membership,
+        return IssueCredentialService().issue(
+            group_member_id=holder_membership.id,
+            issued_by_id=issuer_membership.id,
             period_start=period_start,
             period_end=period_end,
         )

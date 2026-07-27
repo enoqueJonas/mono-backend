@@ -24,3 +24,7 @@ class TransactionFailed(BlockchainException):
 
 class CredentialAlreadyAnchored(BlockchainException):
     """Raised when a credential hash is already anchored."""
+
+
+class CredentialAlreadyRevoked(Exception):
+    """Raised when attempting to revoke an already revoked credential."""

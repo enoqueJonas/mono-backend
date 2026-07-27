@@ -14,6 +14,10 @@ from blockchain.domain.credential_anchor_request import (
 )
 from blockchain.utils.hashing import HashingService
 
+from credentials.domain.value_objects import (
+    CredentialHash,
+)
+
 
 class AnchorService:
     def __init__(
@@ -24,38 +28,54 @@ class AnchorService:
             BlockchainConfigFactory.from_settings()
         )
 
-    @staticmethod
-    def calculate_hash(
-        credential_document: dict[str, Any],
-    ) -> bytes:
-        return HashingService.hash_json(
-            credential_document
-        )
-
     def anchor(
+
         self,
-        credential_document: dict[str, Any],
+
+        credential_hash: CredentialHash,
+
     ) -> BlockchainReceipt:
-        credential_hash = self.calculate_hash(
-            credential_document
-        )
 
         request = CredentialAnchorRequest(
-            credential_hash=credential_hash
+
+            credential_hash=credential_hash.value,
+
         )
 
         return self.client.register_credential_hash(
+
             request
+
+        )
+
+    def revoke(
+        self,
+        credential_hash: CredentialHash,
+    ) -> BlockchainReceipt:
+
+        return self.client.revoke_credential(
+            credential_hash.value
+        )
+
+    def get_credential(
+        self,
+        credential_hash: CredentialHash,
+    ) -> dict[str, Any]:
+
+        return self.client.get_credential(
+            credential_hash.value
         )
 
     def credential_exists(
+
         self,
-        credential_document: dict[str, Any],
+
+        credential_hash: CredentialHash,
+
     ) -> bool:
-        credential_hash = self.calculate_hash(
-            credential_document
-        )
 
         return self.client.credential_exists(
-            credential_hash
+
+            credential_hash.value
+
         )

@@ -11,7 +11,7 @@ class BlockchainAnchorStatus(models.TextChoices):
 class BlockchainAnchor(models.Model):
 
     credential = models.ForeignKey(
-        "credentials.Credential",
+        "credentials.VerifiableCredential",
         on_delete=models.CASCADE,
         related_name="anchors",
     )

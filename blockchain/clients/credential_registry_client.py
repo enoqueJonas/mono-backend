@@ -16,6 +16,7 @@ from blockchain.domain.credential_anchor_request import (
 from blockchain.exceptions import (
     BlockchainConnectionError,
     CredentialAlreadyAnchored,
+    CredentialAlreadyRevoked,
 )
 from blockchain.services.transaction_service import (
     TransactionService,
@@ -98,27 +99,46 @@ class CredentialRegistryClient:
 
     def credential_exists(
         self,
-        credential_hash: bytes,
+        credential_hash: str,
     ) -> bool:
         return bool(
             self.contract.functions
-            .credentialExists(credential_hash)
+            .credentialExists(
+                self._to_bytes32(credential_hash)
+            )
             .call()
         )
 
     def get_credential(
+
         self,
-        credential_hash: bytes,
+
+        credential_hash: str,
+
     ) -> dict[str, Any]:
+
         (
+
             exists,
+
             revoked,
+
             anchored_at,
+
             anchored_by,
+
         ) = (
+
             self.contract.functions
-            .getCredential(credential_hash)
+
+            .getCredential(
+
+                self._to_bytes32(credential_hash)
+
+            )
+
             .call()
+
         )
 
         return {
@@ -142,7 +162,36 @@ class CredentialRegistryClient:
         function = (
             self.contract.functions
             .registerCredentialHash(
-                request.credential_hash
+                self._to_bytes32(request.credential_hash)
+            )
+        )
+
+        return self.transaction_service.execute(
+            function
+        )
+
+    @staticmethod
+    def _to_bytes32(value: str) -> bytes:
+        return bytes.fromhex(value.removeprefix("0x"))
+
+    def revoke_credential(
+        self,
+        credential_hash: str,
+    ) -> BlockchainReceipt:
+
+        credential = self.get_credential(
+            credential_hash
+        )
+
+        if credential["revoked"]:
+            raise CredentialAlreadyRevoked(
+                "Credential is already revoked."
+            )
+
+        function = (
+            self.contract.functions
+            .revokeCredential(
+                self._to_bytes32(credential_hash)
             )
         )
 
