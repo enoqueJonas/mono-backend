@@ -1,13 +1,14 @@
 from django.db import transaction
 from django.utils import timezone
 
-from groups.models import Group, GroupMember, GroupSettings
-from contributions.models import Contribution
 from accounts.models import User
-from groups.models import Group, GroupMember
-from core.exceptions import DomainException
 from accounts.utils.phone import normalize_mz_phone
+from core.exceptions import DomainException
+from groups.models import Group, GroupMember, GroupSettings
 from identity.services.did_service import DIDService
+from blockchain.services.group_anchor_service import (
+    GroupAnchorService,
+)
 
 
 class GroupNotFound(DomainException):
@@ -30,6 +31,35 @@ class GroupIsFull(DomainException):
     default_message = "Group has reached the maximum number of members."
 
 
+class GroupAlreadyArchived(DomainException):
+    default_message = "Group is already archived."
+
+
+class ArchivedGroup(DomainException):
+    default_message = "Archived groups cannot be modified."
+
+
+class MaximumMembersBelowCurrentCount(DomainException):
+    default_message = (
+        "Maximum members cannot be lower than the current "
+        "number of active members."
+    )
+
+
+class GroupMemberNotFound(DomainException):
+    default_message = "Group member not found."
+
+
+class MemberAlreadyLeft(DomainException):
+    default_message = "This member has already left the group."
+
+
+class ManagerCannotRemoveSelf(DomainException):
+    default_message = (
+        "The group manager cannot remove themselves through this operation."
+    )
+
+
 class GroupService:
 
     @staticmethod
@@ -42,8 +72,10 @@ class GroupService:
             description=data.get("description", ""),
         )
 
-        GroupSettings.objects.create(
+        group_settings = GroupSettings.objects.create(
             group=group,
+            version=1,
+            is_active=True,
             **settings_data,
         )
 
@@ -54,7 +86,13 @@ class GroupService:
             status=GroupMember.Status.ACTIVE,
         )
 
-        DIDService.create_for_group(group=group)
+        DIDService.create_for_group(
+            group=group
+        )
+
+        GroupAnchorService().anchor(
+            group_settings
+        )
 
         return group
 
@@ -75,7 +113,7 @@ class GroupService:
     @staticmethod
     def add_member(*, group_id, added_by, phone_number):
         try:
-            group = Group.objects.select_related("settings").get(id=group_id)
+            group = Group.objects.get(id=group_id)
         except Group.DoesNotExist:
             raise GroupNotFound()
 
@@ -87,21 +125,18 @@ class GroupService:
         normalized_phone = normalize_mz_phone(phone_number)
 
         user = User.objects.filter(
-            phone_number=normalized_phone
+            phone_number=normalized_phone,
         ).first()
 
         if user is None:
             raise UserNotFound()
-
-        if GroupMember.objects.filter(group=group, user=user).exists():
-            raise UserAlreadyMember()
 
         active_members_count = GroupMember.objects.filter(
             group=group,
             status=GroupMember.Status.ACTIVE,
         ).count()
 
-        if active_members_count >= group.settings.maximum_members:
+        if active_members_count >= group.current_settings.maximum_members:
             raise GroupIsFull()
 
         existing_member = GroupMember.objects.filter(
@@ -137,13 +172,6 @@ class GroupService:
             status=GroupMember.Status.ACTIVE,
         )
 
-
-class GroupAlreadyArchived(DomainException):
-    default_message = "Group is already archived."
-
-
-class GroupService:
-
     @staticmethod
     def archive_group(*, group_id, archived_by):
         try:
@@ -160,17 +188,11 @@ class GroupService:
             raise GroupAlreadyArchived()
 
         group.status = Group.Status.ARCHIVED
-        group.save(update_fields=["status", "updated_at"])
+        group.save(
+            update_fields=["status", "updated_at"],
+        )
 
         return group
-
-        STRUCTURAL_SETTING_FIELDS = {
-            "contribution_amount",
-            "contribution_frequency",
-            "maximum_members",
-            "rotation_strategy",
-            "requires_consensus",
-        }
 
     @staticmethod
     @transaction.atomic
@@ -181,11 +203,7 @@ class GroupService:
         data: dict,
     ):
         try:
-            group = (
-                Group.objects
-                .select_related("settings")
-                .get(id=group_id)
-            )
+            group = Group.objects.get(id=group_id)
         except Group.DoesNotExist:
             raise GroupNotFound()
 
@@ -197,23 +215,14 @@ class GroupService:
         if group.status == Group.Status.ARCHIVED:
             raise ArchivedGroup()
 
-        supplied_structural_fields = (
-            GroupService.STRUCTURAL_SETTING_FIELDS
-            .intersection(data.keys())
+        current_settings = (
+            GroupSettings.objects
+            .select_for_update()
+            .get(
+                group=group,
+                is_active=True,
+            )
         )
-
-        has_confirmed_contributions = (
-            Contribution.objects.filter(
-                member__group=group,
-                status=Contribution.Status.CONFIRMED,
-            ).exists()
-        )
-
-        if (
-            supplied_structural_fields
-            and has_confirmed_contributions
-        ):
-            raise StructuralSettingsLocked()
 
         if "maximum_members" in data:
             active_members_count = GroupMember.objects.filter(
@@ -224,19 +233,40 @@ class GroupService:
             if data["maximum_members"] < active_members_count:
                 raise MaximumMembersBelowCurrentCount()
 
-        settings = group.settings
+        new_settings_data = {
+            "contribution_amount": current_settings.contribution_amount,
+            "currency": current_settings.currency,
+            "contribution_frequency": current_settings.contribution_frequency,
+            "maximum_members": current_settings.maximum_members,
+            "rotation_strategy": current_settings.rotation_strategy,
+            "requires_consensus": current_settings.requires_consensus,
+            "allow_manual_contributions": (
+                current_settings.allow_manual_contributions
+            ),
+        }
 
-        for field, value in data.items():
-            setattr(settings, field, value)
+        new_settings_data.update(data)
 
-        settings.save(
+        current_settings.is_active = False
+        current_settings.save(
             update_fields=[
-                *data.keys(),
+                "is_active",
                 "updated_at",
             ]
         )
 
-        return settings
+        new_settings = GroupSettings.objects.create(
+            group=group,
+            version=current_settings.version + 1,
+            is_active=True,
+            **new_settings_data,
+        )
+
+        GroupAnchorService().anchor(
+            new_settings
+        )
+
+        return new_settings
 
     @staticmethod
     @transaction.atomic
@@ -290,35 +320,3 @@ class GroupService:
         )
 
         return member
-
-
-class ArchivedGroup(DomainException):
-    default_message = "Archived groups cannot be modified."
-
-
-class StructuralSettingsLocked(DomainException):
-    default_message = (
-        "Structural group settings cannot be changed "
-        "after the first confirmed contribution."
-    )
-
-
-class MaximumMembersBelowCurrentCount(DomainException):
-    default_message = (
-        "Maximum members cannot be lower than the current "
-        "number of active members."
-    )
-
-
-class GroupMemberNotFound(DomainException):
-    default_message = "Group member not found."
-
-
-class MemberAlreadyLeft(DomainException):
-    default_message = "This member has already left the group."
-
-
-class ManagerCannotRemoveSelf(DomainException):
-    default_message = (
-        "The group manager cannot remove themselves through this operation."
-    )

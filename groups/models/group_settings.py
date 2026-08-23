@@ -14,12 +14,20 @@ class GroupSettings(BaseModel):
         FIXED_ORDER = "FIXED_ORDER", "Fixed order"
         RANDOM = "RANDOM", "Random"
 
-    group = models.OneToOneField(
+    group = models.ForeignKey(
         "groups.Group",
         on_delete=models.CASCADE,
-        related_name="settings",
+        related_name="settings_versions",
     )
-    contribution_amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    version = models.PositiveIntegerField(
+        default=1,
+    )
+
+    contribution_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+    )
 
     currency = models.CharField(
         max_length=3,
@@ -30,19 +38,57 @@ class GroupSettings(BaseModel):
         max_length=20,
         choices=ContributionFrequency.choices,
     )
+
     maximum_members = models.PositiveIntegerField()
+
     rotation_strategy = models.CharField(
         max_length=20,
         choices=RotationStrategy.choices,
     )
-    requires_consensus = models.BooleanField(default=True)
-    allow_manual_contributions = models.BooleanField(default=False)
+
+    requires_consensus = models.BooleanField(
+        default=True,
+    )
+
+    allow_manual_contributions = models.BooleanField(
+        default=False,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
 
     class Meta:
         db_table = "group_settings"
+        ordering = [
+            "group",
+            "-version",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "group",
+                    "version",
+                ],
+                name="unique_group_settings_version",
+            ),
+            models.UniqueConstraint(
+                fields=["group"],
+                condition=models.Q(
+                    is_active=True,
+                ),
+                name="unique_active_group_settings",
+            ),
+        ]
 
-    def __str__(self):
-        return f"Settings for {self.group.name}"
+    def __str__(self) -> str:
+        return (
+            f"Settings v{self.version} "
+            f"for {self.group.name}"
+        )
 
-    def validate_currency(self, value):
+    def validate_currency(
+        self,
+        value: str,
+    ) -> str:
         return value.upper()

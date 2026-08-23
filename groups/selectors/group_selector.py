@@ -13,7 +13,6 @@ class GroupSelector:
         return (
             Group.objects
             .filter(members__user=user, members__status="ACTIVE")
-            .select_related("settings")
             .distinct()
             .order_by("-created_at")
         )
@@ -27,7 +26,6 @@ class GroupSelector:
                 members__user=user,
                 members__status="ACTIVE",
             )
-            .select_related("settings")
             .first()
         )
 
@@ -46,7 +44,6 @@ class GroupSelector:
 
             )
 
-            .select_related("settings")
 
             .distinct()
 
@@ -71,7 +68,6 @@ class GroupSelector:
 
             )
 
-            .select_related("settings")
 
             .first()
 
@@ -114,7 +110,7 @@ class GroupSelector:
 
         return {
             "active_members": active_members,
-            "maximum_members": group.settings.maximum_members,
+            "maximum_members": group.current_settings.maximum_members,
             "confirmed_contributions": (
                 contribution_stats["confirmed_contributions"]
             ),

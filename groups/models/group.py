@@ -9,8 +9,14 @@ class Group(BaseModel):
         CLOSED = "CLOSED", "Closed"
         ARCHIVED = "ARCHIVED", "Archived"
 
-    name = models.CharField(max_length=120)
-    description = models.TextField(blank=True)
+    name = models.CharField(
+        max_length=120,
+    )
+
+    description = models.TextField(
+        blank=True,
+    )
+
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
@@ -20,5 +26,15 @@ class Group(BaseModel):
     class Meta:
         db_table = "groups"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
+
+    @property
+    def current_settings(self):
+        return self.settings_versions.get(
+            is_active=True,
+        )
+
+    @property
+    def current_settings_version(self) -> int:
+        return self.current_settings.version

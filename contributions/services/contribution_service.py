@@ -39,10 +39,13 @@ class ContributionService:
         data: dict,
     ) -> Contribution:
         try:
-            group = Group.objects.select_related("settings").get(id=group_id)
+            group = Group.objects.get(
+                id=group_id,
+            )
         except Group.DoesNotExist:
             raise GroupNotFound()
 
+        current_settings = group.current_settings
         manager_membership = GroupMember.objects.filter(
             group=group,
             user=registered_by,
@@ -64,7 +67,9 @@ class ContributionService:
         if member.status != GroupMember.Status.ACTIVE:
             raise InactiveMember()
 
-        expected_amount = Decimal(group.settings.contribution_amount)
+        expected_amount = Decimal(
+            current_settings.contribution_amount
+        )
         received_amount = Decimal(data["amount"])
 
         if received_amount != expected_amount:
@@ -75,7 +80,8 @@ class ContributionService:
         contribution = Contribution.objects.create(
             member=member,
             amount=received_amount,
-            currency=group.settings.currency,
+            group_settings=current_settings,
+            currency=current_settings.currency,
             contribution_period=data["contribution_period"],
             reference=reference,
             source=Contribution.Source.MANUAL,

@@ -9,23 +9,20 @@ from blockchain.domain.blockchain_config import (
 
 
 class BlockchainConfigFactory:
-
     @staticmethod
-    def from_settings() -> BlockchainConfig:
-
+    def from_settings(
+        *,
+        contract_address: str | None = None,
+    ) -> BlockchainConfig:
         return BlockchainConfig(
-
             rpc_url=settings.BLOCKCHAIN_RPC_URL,
-
             chain_id=settings.BLOCKCHAIN_CHAIN_ID,
-
-            contract_address=settings.CREDENTIAL_REGISTRY_ADDRESS,
-
+            contract_address=(
+                contract_address
+                or settings.CREDENTIAL_REGISTRY_ADDRESS
+            ),
             account=BlockchainAccount(
-
                 address=settings.BLOCKCHAIN_ACCOUNT_ADDRESS,
-
                 private_key=settings.BLOCKCHAIN_PRIVATE_KEY,
-
             ),
         )

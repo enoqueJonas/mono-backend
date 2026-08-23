@@ -1,3 +1,12 @@
-from .blockchain_anchor import BlockchainAnchor
+from blockchain.models.blockchain_anchor import (
+    BlockchainAnchor,
+    BlockchainAnchorStatus,
+    BlockchainAnchorType,
+)
 
-__all__ = ["BlockchainAnchor"]
+
+__all__ = [
+    "BlockchainAnchor",
+    "BlockchainAnchorStatus",
+    "BlockchainAnchorType",
+]

@@ -8,12 +8,55 @@ class BlockchainAnchorStatus(models.TextChoices):
     REPLACED = "REPLACED", "Replaced"
 
 
+class BlockchainAnchorType(models.TextChoices):
+    CREDENTIAL = "CREDENTIAL", "Credential"
+    GROUP_SETTINGS = (
+        "GROUP_SETTINGS",
+        "Group Settings",
+    )
+    CONTRIBUTION = (
+        "CONTRIBUTION",
+        "Contribution",
+    )
+    DISBURSEMENT = (
+        "DISBURSEMENT",
+        "Disbursement",
+    )
+
+
 class BlockchainAnchor(models.Model):
+
+    anchor_type = models.CharField(
+        max_length=30,
+        choices=BlockchainAnchorType.choices,
+    )
+
+    content_hash = models.CharField(
+        max_length=64,
+    )
 
     credential = models.ForeignKey(
         "credentials.VerifiableCredential",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="anchors",
+        null=True,
+        blank=True,
+    )
+
+    group_settings = models.ForeignKey(
+        "groups.GroupSettings",
+        on_delete=models.PROTECT,
+        related_name="anchors",
+        null=True,
+        blank=True,
+    )
+
+    contribution = models.ForeignKey(
+        "contributions.Contribution",
+        on_delete=models.PROTECT,
+        related_name="anchors",
+        null=True,
+        blank=True,
     )
 
     network = models.CharField(
@@ -52,24 +95,26 @@ class BlockchainAnchor(models.Model):
     )
 
     class Meta:
-
         indexes = [
-
             models.Index(
-                fields=[
-                    "credential",
-                ]
+                fields=["anchor_type"],
             ),
-
             models.Index(
-                fields=[
-                    "transaction_hash",
-                ]
+                fields=["content_hash"],
             ),
-
             models.Index(
-                fields=[
-                    "status",
-                ]
+                fields=["credential"],
+            ),
+            models.Index(
+                fields=["group_settings"],
+            ),
+            models.Index(
+                fields=["contribution"],
+            ),
+            models.Index(
+                fields=["transaction_hash"],
+            ),
+            models.Index(
+                fields=["status"],
             ),
         ]

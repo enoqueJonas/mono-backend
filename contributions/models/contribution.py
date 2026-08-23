@@ -20,6 +20,12 @@ class Contribution(BaseModel):
         related_name="contributions",
     )
 
+    group_settings = models.ForeignKey(
+        "groups.GroupSettings",
+        on_delete=models.PROTECT,
+        related_name="contributions",
+    )
+
     amount = models.DecimalField(max_digits=12, decimal_places=2)
 
     currency = models.CharField(
