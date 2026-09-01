@@ -22,6 +22,14 @@ class RotationOrder(BaseModel):
         related_name="rotation_orders",
     )
 
+    group_settings = models.ForeignKey(
+        "groups.GroupSettings",
+        on_delete=models.PROTECT,
+        related_name="rotation_orders",
+    )
+
+    contribution_period = models.DateField()
+
     cycle_number = models.PositiveIntegerField()
 
     position = models.PositiveIntegerField()
@@ -54,6 +62,16 @@ class RotationOrder(BaseModel):
                     "member",
                 ],
                 name="unique_member_per_rotation_cycle",
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "group",
+                    "cycle_number",
+                ],
+                condition=models.Q(
+                    status="CURRENT",
+                ),
+                name="unique_current_rotation",
             ),
         ]
         indexes = [

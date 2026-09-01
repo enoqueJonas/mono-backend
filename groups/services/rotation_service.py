@@ -23,6 +23,18 @@ class NoActiveMembers(DomainException):
     )
 
 
+class CurrentRotationNotFound(DomainException):
+    default_message = (
+        "No current beneficiary exists for this cycle."
+    )
+
+
+class RotationCycleNotFound(DomainException):
+    default_message = (
+        "Rotation cycle does not exist."
+    )
+
+
 class RotationService:
 
     @staticmethod
@@ -31,6 +43,8 @@ class RotationService:
         *,
         group: Group,
         cycle_number: int,
+        contribution_period,
+        group_settings=None,
     ) -> list[RotationOrder]:
 
         if RotationOrder.objects.filter(
@@ -49,7 +63,10 @@ class RotationService:
         if not members:
             raise NoActiveMembers()
 
-        settings = group.current_settings
+        settings = (
+            group_settings
+            or group.current_settings
+        )
 
         if (
             settings.rotation_strategy
@@ -75,6 +92,8 @@ class RotationService:
                 RotationOrder(
                     group=group,
                     member=member,
+                    group_settings=settings,
+                    contribution_period=contribution_period,
                     cycle_number=cycle_number,
                     position=index,
                     status=(
@@ -95,3 +114,110 @@ class RotationService:
                 cycle_number=cycle_number,
             ).order_by("position")
         )
+
+    @staticmethod
+    def get_current(
+        *,
+        group: Group,
+        cycle_number: int,
+    ) -> RotationOrder:
+
+        current = (
+            RotationOrder.objects
+            .select_related(
+                "member",
+                "member__user",
+            )
+            .filter(
+                group=group,
+                cycle_number=cycle_number,
+                status=RotationOrder.Status.CURRENT,
+            )
+            .first()
+        )
+
+        if current is None:
+            cycle_exists = (
+                RotationOrder.objects
+                .filter(
+                    group=group,
+                    cycle_number=cycle_number,
+                )
+                .exists()
+            )
+
+            if not cycle_exists:
+                raise RotationCycleNotFound()
+
+            raise CurrentRotationNotFound()
+
+        return current
+
+    @staticmethod
+    @transaction.atomic
+    def advance(
+        *,
+        group: Group,
+        cycle_number: int,
+    ) -> RotationOrder | None:
+
+        rotation_items = (
+            RotationOrder.objects
+            .select_for_update()
+            .filter(
+                group=group,
+                cycle_number=cycle_number,
+            )
+            .order_by("position")
+        )
+
+        if not rotation_items.exists():
+            raise RotationCycleNotFound()
+
+        current = (
+            rotation_items
+            .filter(
+                status=RotationOrder.Status.CURRENT,
+            )
+            .first()
+        )
+
+        if current is None:
+            raise CurrentRotationNotFound()
+
+        current.status = (
+            RotationOrder.Status.COMPLETED
+        )
+
+        current.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
+
+        next_item = (
+            rotation_items
+            .filter(
+                position__gt=current.position,
+                status=RotationOrder.Status.PENDING,
+            )
+            .order_by("position")
+            .first()
+        )
+
+        if next_item is None:
+            return None
+
+        next_item.status = (
+            RotationOrder.Status.CURRENT
+        )
+
+        next_item.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
+
+        return next_item
