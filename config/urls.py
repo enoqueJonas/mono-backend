@@ -30,4 +30,13 @@ urlpatterns = [
         "api/v1/credentials/",
         include("credentials.urls"),
     ),
+    path("api/v1/", include("disbursements.urls")),
+    path(
+        "api/v1/",
+        include("penalties.urls"),
+    ),
+    path(
+        "api/v1/wallets/",
+        include("wallets.urls"),
+    ),
 ]

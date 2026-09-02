@@ -8,6 +8,27 @@ from contributions.models import Contribution
 from groups.models import Group, GroupMember
 
 
+class InvalidContributionCurrency(DomainException):
+    default_message = (
+        "Contribution currency does not match "
+        "group settings."
+    )
+
+
+class DuplicateContribution(DomainException):
+    default_message = (
+        "A contribution already exists for "
+        "this member and period."
+    )
+
+
+class DuplicateContributionReference(DomainException):
+    default_message = (
+        "A contribution with this reference "
+        "already exists."
+    )
+
+
 class GroupNotFound(DomainException):
     default_message = "Group not found."
 
@@ -85,6 +106,82 @@ class ContributionService:
             contribution_period=data["contribution_period"],
             reference=reference,
             source=Contribution.Source.MANUAL,
+            status=Contribution.Status.CONFIRMED,
+        )
+
+        return contribution
+
+    @staticmethod
+    @transaction.atomic
+    def register_mobile_wallet_contribution(
+        *,
+        data: dict,
+    ) -> Contribution:
+
+        try:
+            group = Group.objects.get(
+                id=data["group_id"],
+            )
+        except Group.DoesNotExist:
+            raise GroupNotFound()
+
+        current_settings = group.current_settings
+
+        member = (
+            GroupMember.objects
+            .filter(
+                id=data["group_member_id"],
+                group=group,
+            )
+            .first()
+        )
+
+        if member is None:
+            raise MemberNotFound()
+
+        if member.status != GroupMember.Status.ACTIVE:
+            raise InactiveMember()
+
+        expected_amount = Decimal(
+            current_settings.contribution_amount
+        )
+
+        received_amount = Decimal(
+            data["amount"]
+        )
+
+        if received_amount != expected_amount:
+            raise InvalidContributionAmount()
+
+        if (
+            data["currency"]
+            != current_settings.currency
+        ):
+            raise InvalidContributionCurrency()
+
+        if Contribution.objects.filter(
+            reference=data["reference"],
+        ).exists():
+            raise DuplicateContributionReference()
+
+        if Contribution.objects.filter(
+            member=member,
+            contribution_period=data[
+                "contribution_period"
+            ],
+        ).exists():
+            raise DuplicateContribution()
+
+        contribution = Contribution.objects.create(
+            member=member,
+            group_settings=current_settings,
+            amount=received_amount,
+            currency=current_settings.currency,
+            contribution_period=data[
+                "contribution_period"
+            ],
+            reference=data["reference"],
+            source=Contribution.Source.MOBILE_WALLET,
             status=Contribution.Status.CONFIRMED,
         )
 

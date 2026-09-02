@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     "identity",
     "credentials",
     "disbursements",
+    "penalties"
 ]
 
 MIDDLEWARE = [
