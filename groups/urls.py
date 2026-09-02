@@ -7,6 +7,9 @@ from groups.views.members import (
 )
 from groups.views.groups import GroupListCreateView, GroupDetailView
 from groups.views.settings import GroupSettingsUpdateView
+from groups.views.rotation import (
+    GroupRotationView,
+)
 
 urlpatterns = [
     path("", GroupListCreateView.as_view(), name="group-list-create"),
@@ -19,5 +22,10 @@ urlpatterns = [
         "<uuid:group_id>/members/<uuid:group_member_id>/",
         GroupMemberDetailView.as_view(),
         name="group-member-detail",
+    ),
+    path(
+        "<uuid:group_id>/rotation/",
+        GroupRotationView.as_view(),
+        name="group-rotation",
     ),
 ]
