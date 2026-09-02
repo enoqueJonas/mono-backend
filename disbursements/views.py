@@ -135,3 +135,39 @@ class GroupDisbursementApproveView(APIView):
             ).data,
             message="Disbursement approved successfully.",
         )
+
+
+class GroupDisbursementCompleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(
+        self,
+        request,
+        group_id,
+        disbursement_id,
+    ):
+        disbursement = (
+            DisbursementSelector.get_group_disbursement(
+                group_id=group_id,
+                disbursement_id=disbursement_id,
+            )
+        )
+
+        if disbursement is None:
+            raise DomainException(
+                "Disbursement not found."
+            )
+
+        completed = DisbursementService.complete(
+            disbursement_id=disbursement.id,
+            completed_by=request.user,
+        )
+
+        return success(
+            data=DisbursementSerializer(
+                completed
+            ).data,
+            message=(
+                "Disbursement completed successfully."
+            ),
+        )

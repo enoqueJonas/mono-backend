@@ -1,11 +1,16 @@
 from django.urls import path
 
 from disbursements.views import (
-    GroupDisbursementApproveView,
-    GroupDisbursementDetailView,
-    GroupDisbursementListCreateView,
-)
 
+    GroupDisbursementApproveView,
+
+    GroupDisbursementCompleteView,
+
+    GroupDisbursementDetailView,
+
+    GroupDisbursementListCreateView,
+
+)
 
 urlpatterns = [
     path(
@@ -28,5 +33,13 @@ urlpatterns = [
         ),
         GroupDisbursementApproveView.as_view(),
         name="group-disbursement-approve",
+    ),
+    path(
+        (
+            "groups/<uuid:group_id>/disbursements/"
+            "<uuid:disbursement_id>/complete/"
+        ),
+        GroupDisbursementCompleteView.as_view(),
+        name="group-disbursement-complete",
     ),
 ]
