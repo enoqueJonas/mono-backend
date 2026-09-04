@@ -30,6 +30,7 @@ class GroupStatisticsSerializer(serializers.Serializer):
 
 class GroupSerializer(serializers.ModelSerializer):
     settings = serializers.SerializerMethodField()
+    user_role = serializers.SerializerMethodField()
 
     class Meta:
         model = Group
@@ -39,16 +40,31 @@ class GroupSerializer(serializers.ModelSerializer):
             "description",
             "status",
             "settings",
+            "user_role",
             "created_at",
             "updated_at",
         )
 
     def get_settings(self, obj):
         settings = obj.settings_versions.filter(is_active=True).first()
+
         if settings is None:
             return None
 
         return GroupSettingsSerializer(settings).data
+
+    def get_user_role(self, obj):
+        user = self.context.get("user")
+
+        if user is None:
+            return None
+
+        membership = obj.members.filter(user=user).first()
+
+        if membership is None:
+            return None
+
+        return membership.role
 
 
 class GroupDetailSerializer(GroupSerializer):
