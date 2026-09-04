@@ -241,7 +241,6 @@ class CredentialService:
             GroupMember.objects
             .select_related(
                 "group",
-                "group__settings",
                 "user",
             )
             .filter(
