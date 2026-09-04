@@ -11,6 +11,11 @@ class DisbursementSerializer(serializers.ModelSerializer):
 
     beneficiary_name = serializers.SerializerMethodField()
 
+    rotation_position = serializers.IntegerField(
+        source="rotation_order.position",
+        read_only=True,
+    )
+
     contribution_period = serializers.DateField(
         source="rotation_order.contribution_period",
         read_only=True,
@@ -30,6 +35,7 @@ class DisbursementSerializer(serializers.ModelSerializer):
             "beneficiary",
             "beneficiary_name",
             "rotation_order",
+            "rotation_position",
             "group_settings",
             "settings_version",
             "cycle_number",
