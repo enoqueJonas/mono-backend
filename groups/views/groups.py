@@ -19,7 +19,11 @@ class GroupListCreateView(APIView):
 
         groups = GroupSelector.list_user_groups(user=request.user)
         return success(
-            data=GroupSerializer(groups, many=True).data
+            data=GroupSerializer(
+                groups,
+                many=True,
+                context={"user": request.user},
+            ).data
         )
 
     def post(self, request):
@@ -33,7 +37,10 @@ class GroupListCreateView(APIView):
         )
 
         return success(
-            data=GroupSerializer(group).data,
+            data=GroupSerializer(
+                group,
+                context={"user": request.user},
+            ).data,
             message="Group created successfully.",
             status_code=201,
         )
@@ -62,7 +69,10 @@ class GroupDetailView(APIView):
         return success(
             data=GroupDetailSerializer(
                 group,
-                context={"statistics": statistics},
+                context={
+                    "statistics": statistics,
+                    "user": request.user,
+                },
             ).data
         )
 
@@ -74,6 +84,9 @@ class GroupDetailView(APIView):
         )
 
         return success(
-            data=GroupSerializer(group).data,
+            data=GroupSerializer(
+                group,
+                context={"user": request.user},
+            ).data,
             message="Group archived successfully.",
         )
