@@ -22,51 +22,50 @@ from penalties.services import PenaltyService
 
 class ActivePenalty(DomainException):
     default_message = (
-        "The beneficiary has an active penalty "
-        "and cannot receive a disbursement."
+        "O beneficiário possui uma penalização activa "
+        "e não pode receber um desembolso."
     )
 
 
 class InvalidDisbursementStatus(DomainException):
     default_message = (
-        "The disbursement is not in a valid status "
-        "for this operation."
+        "O desembolso não se encontra num estado válido "
+        "para esta operação."
     )
 
 
 class DisbursementNotFound(DomainException):
-    default_message = "Disbursement not found."
+    default_message = "Desembolso não encontrado."
 
 
 class DisbursementAlreadyExists(DomainException):
     default_message = (
-        "A disbursement already exists for "
-        "this rotation position."
+        "Já existe um desembolso para esta posição da rotação."
     )
 
 
 class InactiveBeneficiary(DomainException):
     default_message = (
-        "The current beneficiary is not active."
+        "O beneficiário actual não está activo."
     )
 
 
 class NoConfirmedContributions(DomainException):
     default_message = (
-        "There are no confirmed contributions "
-        "available for this cycle."
+        "Não existem contribuições confirmadas disponíveis "
+        "para este ciclo."
     )
 
 
 class IncompleteContributions(DomainException):
     default_message = (
-        "Not all expected contributions are confirmed."
+        "Nem todas as contribuições esperadas estão confirmadas."
     )
 
 
 class ArchivedGroup(DomainException):
     default_message = (
-        "Archived groups cannot create disbursements."
+        "Grupos arquivados não podem criar desembolsos."
     )
 
 
