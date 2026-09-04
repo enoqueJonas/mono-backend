@@ -72,6 +72,19 @@ class ArchivedGroup(DomainException):
 class DisbursementService:
 
     @staticmethod
+    def _ensure_beneficiary_can_receive(*, member) -> None:
+        if (
+            member.status
+            != GroupMember.Status.ACTIVE
+        ):
+            raise InactiveBeneficiary()
+
+        if PenaltyService.has_active_penalty(
+            member=member,
+        ):
+            raise ActivePenalty()
+
+    @staticmethod
     @transaction.atomic
     def create(
         *,
@@ -98,16 +111,9 @@ class DisbursementService:
 
         beneficiary = current_rotation.member
 
-        if (
-            beneficiary.status
-            != GroupMember.Status.ACTIVE
-        ):
-            raise InactiveBeneficiary()
-
-        if PenaltyService.has_active_penalty(
+        DisbursementService._ensure_beneficiary_can_receive(
             member=beneficiary,
-        ):
-            raise ActivePenalty()
+        )
 
         if Disbursement.objects.filter(
             rotation_order=current_rotation,
@@ -186,6 +192,7 @@ class DisbursementService:
         disbursement = (
             Disbursement.objects
             .select_for_update()
+            .select_related("beneficiary")
             .filter(id=disbursement_id)
             .first()
         )
@@ -203,6 +210,10 @@ class DisbursementService:
             != Disbursement.Status.AWAITING_CONSENSUS
         ):
             raise InvalidDisbursementStatus()
+
+        DisbursementService._ensure_beneficiary_can_receive(
+            member=disbursement.beneficiary,
+        )
 
         disbursement.status = (
             Disbursement.Status.APPROVED
@@ -231,6 +242,7 @@ class DisbursementService:
             .select_related(
                 "group",
                 "rotation_order",
+                "beneficiary",
             )
             .filter(id=disbursement_id)
             .first()
@@ -249,6 +261,10 @@ class DisbursementService:
             != Disbursement.Status.APPROVED
         ):
             raise InvalidDisbursementStatus()
+
+        DisbursementService._ensure_beneficiary_can_receive(
+            member=disbursement.beneficiary,
+        )
 
         disbursement.status = (
             Disbursement.Status.COMPLETED
