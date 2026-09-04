@@ -8,19 +8,6 @@ class GroupSettingsSerializer(serializers.ModelSerializer):
         model = GroupSettings
         fields = (
             "contribution_amount",
-            "contribution_frequency",
-            "maximum_members",
-            "rotation_strategy",
-            "requires_consensus",
-            "allow_manual_contributions",
-        )
-
-
-class GroupSettingsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = GroupSettings
-        fields = (
-            "contribution_amount",
             "currency",
             "contribution_frequency",
             "maximum_members",
@@ -42,7 +29,7 @@ class GroupStatisticsSerializer(serializers.Serializer):
 
 
 class GroupSerializer(serializers.ModelSerializer):
-    settings = GroupSettingsSerializer(read_only=True)
+    settings = serializers.SerializerMethodField()
 
     class Meta:
         model = Group
@@ -55,6 +42,13 @@ class GroupSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def get_settings(self, obj):
+        settings = obj.settings_versions.filter(is_active=True).first()
+        if settings is None:
+            return None
+
+        return GroupSettingsSerializer(settings).data
 
 
 class GroupDetailSerializer(GroupSerializer):
