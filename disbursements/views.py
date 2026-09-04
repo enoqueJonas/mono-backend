@@ -65,7 +65,7 @@ class GroupDisbursementListCreateView(APIView):
             data=DisbursementSerializer(
                 disbursement
             ).data,
-            message="Disbursement created successfully.",
+            message="Desembolso criado com sucesso.",
             status_code=201,
         )
 
@@ -93,7 +93,7 @@ class GroupDisbursementDetailView(APIView):
 
         if disbursement is None:
             raise DomainException(
-                "Disbursement not found."
+                "Desembolso não encontrado."
             )
 
         return success(
@@ -121,7 +121,7 @@ class GroupDisbursementApproveView(APIView):
 
         if disbursement is None:
             raise DomainException(
-                "Disbursement not found."
+                "Desembolso não encontrado."
             )
 
         approved = DisbursementService.approve(
@@ -133,7 +133,7 @@ class GroupDisbursementApproveView(APIView):
             data=DisbursementSerializer(
                 approved
             ).data,
-            message="Disbursement approved successfully.",
+            message="Desembolso aprovado com sucesso.",
         )
 
 
@@ -155,7 +155,7 @@ class GroupDisbursementCompleteView(APIView):
 
         if disbursement is None:
             raise DomainException(
-                "Disbursement not found."
+                "Desembolso não encontrado."
             )
 
         completed = DisbursementService.complete(
@@ -168,6 +168,6 @@ class GroupDisbursementCompleteView(APIView):
                 completed
             ).data,
             message=(
-                "Disbursement completed successfully."
+                "Desembolso concluído com sucesso."
             ),
         )
