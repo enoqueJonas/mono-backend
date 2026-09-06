@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.utils import timezone
 
 from credentials.application.repositories import (
@@ -13,6 +15,8 @@ from credentials.models import VerifiableCredential
 class DjangoCredentialRepository(
     CredentialRepository,
 ):
+    DEFAULT_VALIDITY_DAYS = 365
+
     def save(
         self,
         *,
@@ -32,6 +36,10 @@ class DjangoCredentialRepository(
             period_start=period_start,
             period_end=period_end,
             valid_from=document.issuance_date,
+            valid_until=(
+                document.issuance_date
+                + timedelta(days=self.DEFAULT_VALIDITY_DAYS)
+            ),
             credential_document=document.to_dict(),
             credential_hash=credential_hash.value,
         )
