@@ -143,7 +143,6 @@ class IssueCredentialService:
             GroupMember.objects
             .select_related(
                 "group",
-                "group__settings",
                 "user",
             )
             .get(id=group_member_id)
