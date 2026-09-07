@@ -3,30 +3,22 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
+from blockchain.services.contribution_anchor_service import ContributionAnchorService
 from core.exceptions import DomainException
 from contributions.models import Contribution
 from groups.models import Group, GroupMember
 
 
 class InvalidContributionCurrency(DomainException):
-    default_message = (
-        "Contribution currency does not match "
-        "group settings."
-    )
+    default_message = "Contribution currency does not match group settings."
 
 
 class DuplicateContribution(DomainException):
-    default_message = (
-        "A contribution already exists for "
-        "this member and period."
-    )
+    default_message = "A contribution already exists for this member and period."
 
 
 class DuplicateContributionReference(DomainException):
-    default_message = (
-        "A contribution with this reference "
-        "already exists."
-    )
+    default_message = "A contribution with this reference already exists."
 
 
 class GroupNotFound(DomainException):
@@ -50,7 +42,6 @@ class InvalidContributionAmount(DomainException):
 
 
 class ContributionService:
-
     @staticmethod
     @transaction.atomic
     def register_manual_contribution(
@@ -60,9 +51,7 @@ class ContributionService:
         data: dict,
     ) -> Contribution:
         try:
-            group = Group.objects.get(
-                id=group_id,
-            )
+            group = Group.objects.get(id=group_id)
         except Group.DoesNotExist:
             raise GroupNotFound()
 
@@ -88,9 +77,7 @@ class ContributionService:
         if member.status != GroupMember.Status.ACTIVE:
             raise InactiveMember()
 
-        expected_amount = Decimal(
-            current_settings.contribution_amount
-        )
+        expected_amount = Decimal(current_settings.contribution_amount)
         received_amount = Decimal(data["amount"])
 
         if received_amount != expected_amount:
@@ -109,6 +96,7 @@ class ContributionService:
             status=Contribution.Status.CONFIRMED,
         )
 
+        ContributionAnchorService().anchor(contribution)
         return contribution
 
     @staticmethod
@@ -117,24 +105,17 @@ class ContributionService:
         *,
         data: dict,
     ) -> Contribution:
-
         try:
-            group = Group.objects.get(
-                id=data["group_id"],
-            )
+            group = Group.objects.get(id=data["group_id"])
         except Group.DoesNotExist:
             raise GroupNotFound()
 
         current_settings = group.current_settings
 
-        member = (
-            GroupMember.objects
-            .filter(
-                id=data["group_member_id"],
-                group=group,
-            )
-            .first()
-        )
+        member = GroupMember.objects.filter(
+            id=data["group_member_id"],
+            group=group,
+        ).first()
 
         if member is None:
             raise MemberNotFound()
@@ -142,33 +123,21 @@ class ContributionService:
         if member.status != GroupMember.Status.ACTIVE:
             raise InactiveMember()
 
-        expected_amount = Decimal(
-            current_settings.contribution_amount
-        )
-
-        received_amount = Decimal(
-            data["amount"]
-        )
+        expected_amount = Decimal(current_settings.contribution_amount)
+        received_amount = Decimal(data["amount"])
 
         if received_amount != expected_amount:
             raise InvalidContributionAmount()
 
-        if (
-            data["currency"]
-            != current_settings.currency
-        ):
+        if data["currency"] != current_settings.currency:
             raise InvalidContributionCurrency()
 
-        if Contribution.objects.filter(
-            reference=data["reference"],
-        ).exists():
+        if Contribution.objects.filter(reference=data["reference"]).exists():
             raise DuplicateContributionReference()
 
         if Contribution.objects.filter(
             member=member,
-            contribution_period=data[
-                "contribution_period"
-            ],
+            contribution_period=data["contribution_period"],
         ).exists():
             raise DuplicateContribution()
 
@@ -177,14 +146,13 @@ class ContributionService:
             group_settings=current_settings,
             amount=received_amount,
             currency=current_settings.currency,
-            contribution_period=data[
-                "contribution_period"
-            ],
+            contribution_period=data["contribution_period"],
             reference=data["reference"],
             source=Contribution.Source.MOBILE_WALLET,
             status=Contribution.Status.CONFIRMED,
         )
 
+        ContributionAnchorService().anchor(contribution)
         return contribution
 
     @staticmethod
