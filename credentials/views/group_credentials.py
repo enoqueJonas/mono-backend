@@ -1,7 +1,9 @@
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from core.responses import success
+from credentials.selectors.credential_selector import CredentialSelector
 from credentials.serializers.issue_credential import (
     IssueContributionCredentialSerializer,
 )
@@ -11,6 +13,28 @@ from credentials.serializers.verifiable_credential import (
 from credentials.services.credential_service import (
     CredentialService,
 )
+
+
+class GroupCredentialListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, group_id):
+        credentials = CredentialSelector.list_for_managed_group(
+            group_id=group_id,
+            user=request.user,
+        )
+
+        if credentials is None:
+            raise PermissionDenied(
+                "Apenas o gestor activo do grupo pode consultar estas credenciais."
+            )
+
+        return success(
+            data=VerifiableCredentialSerializer(
+                credentials,
+                many=True,
+            ).data
+        )
 
 
 class GroupCredentialIssueView(APIView):
