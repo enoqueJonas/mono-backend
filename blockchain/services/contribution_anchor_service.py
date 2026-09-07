@@ -1,3 +1,5 @@
+import os
+
 from django.conf import settings
 from django.utils import timezone
 
@@ -21,9 +23,18 @@ class ContributionAnchorService:
         self,
         client: ContributionRegistryClient | None = None,
     ) -> None:
+        contract_address = os.environ.get(
+            "CONTRIBUTION_REGISTRY_ADDRESS",
+            "",
+        )
+        if not contract_address and client is None:
+            raise ValueError(
+                "CONTRIBUTION_REGISTRY_ADDRESS is not configured."
+            )
+
         self.client = client or ContributionRegistryClient(
             BlockchainConfigFactory.from_settings(
-                contract_address=settings.CONTRIBUTION_REGISTRY_ADDRESS,
+                contract_address=contract_address,
             )
         )
 
