@@ -25,7 +25,7 @@ def test_registers_and_reads_contribution(registry, accounts):
         registry.getContribution(contribution_id)
     )
 
-    assert stored_hash == contribution_hash
+    assert bytes(stored_hash) == contribution_hash
     assert anchored_at > 0
     assert anchored_by == accounts[0]
     assert exists is True
