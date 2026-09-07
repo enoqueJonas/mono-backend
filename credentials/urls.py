@@ -6,6 +6,7 @@ from credentials.views.credentials import (
 )
 from credentials.views.group_credentials import (
     GroupCredentialIssueView,
+    GroupCredentialListView,
 )
 from credentials.views.verify_credential import (
     VerifyCredentialView,
@@ -24,6 +25,11 @@ urlpatterns = [
         "<uuid:credential_id>/",
         CredentialDetailView.as_view(),
         name="credential-detail",
+    ),
+    path(
+        "groups/<uuid:group_id>/",
+        GroupCredentialListView.as_view(),
+        name="group-credential-list",
     ),
     path(
         "<uuid:group_id>/credentials/",
