@@ -1,14 +1,5 @@
-from contributions.services.contribution_service import (
-    ContributionService,
-    DuplicateContribution,
-    DuplicateContributionReference,
-    InactiveMember,
-    InvalidContributionAmount,
-    InvalidContributionCurrency,
-    MemberNotFound,
-)
-
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import TestCase
 
@@ -33,6 +24,13 @@ from groups.models import (
 class MobileWalletContributionServiceTests(TestCase):
 
     def setUp(self):
+        self.anchor_patcher = patch(
+            "contributions.services.contribution_service."
+            "ContributionAnchorService"
+        )
+        self.mock_anchor_service = self.anchor_patcher.start()
+        self.addCleanup(self.anchor_patcher.stop)
+
         self.member_user = User.objects.create_user(
             phone_number="+258841010101",
             password="test1234",
@@ -115,6 +113,10 @@ class MobileWalletContributionServiceTests(TestCase):
         self.assertEqual(
             contribution.reference,
             "WALLET-001",
+        )
+
+        self.mock_anchor_service.return_value.anchor.assert_called_once_with(
+            contribution
         )
 
     def test_mobile_wallet_rejects_invalid_amount(self):
