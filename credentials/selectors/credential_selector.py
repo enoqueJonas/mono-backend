@@ -29,6 +29,24 @@ class CredentialSelector:
         )
 
     @classmethod
+    def list_for_managed_group(cls, *, group_id, user):
+        is_group_manager = GroupMember.objects.filter(
+            group_id=group_id,
+            user=user,
+            role=GroupMember.Role.MANAGER,
+            status=GroupMember.Status.ACTIVE,
+        ).exists()
+
+        if not is_group_manager:
+            return None
+
+        return (
+            cls._base_queryset()
+            .filter(group_member__group_id=group_id)
+            .order_by("-valid_from")
+        )
+
+    @classmethod
     def get_accessible_credential(
         cls,
         *,
