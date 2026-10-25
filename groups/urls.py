@@ -6,12 +6,13 @@ from groups.views.members import (
     GroupMemberListCreateView,
 )
 from groups.views.groups import GroupListCreateView, GroupDetailView
-from groups.views.settings import GroupSettingsUpdateView
+from groups.views.settings import GroupSettingsUpdateView, GroupSettingsIntegrityView
 from groups.views.rotation import (
     GroupRotationView,
 )
 
 urlpatterns = [
+    path('<uuid:group_id>/settings/<int:version>/integrity/', GroupSettingsIntegrityView.as_view(), name='group-settings-integrity'),
     path("", GroupListCreateView.as_view(), name="group-list-create"),
     path("<uuid:group_id>/", GroupDetailView.as_view(), name="group-detail"),
     path("<uuid:group_id>/members/",
