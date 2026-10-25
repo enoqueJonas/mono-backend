@@ -1,4 +1,5 @@
 from blockchain.services.anchor_service import AnchorService
+from groups.services.group_service import GroupService
 from credentials.infrastructure.repositories.django_credential_repository import (
     DjangoCredentialRepository,
 )
@@ -30,12 +31,20 @@ class RevokeCredentialService:
         *,
         credential_id,
         reason: str = "",
+        revoked_by=None,
     ):
 
         credential = (
             self.credential_repository.get_by_id(
                 credential_id
             )
+        )
+
+        if revoked_by is None:
+            raise PermissionError('Revocation requires an authenticated actor.')
+        GroupService.ensure_manager(
+            group_id=credential.group_member.group_id,
+            user=revoked_by,
         )
 
         self.anchor_service.revoke(
