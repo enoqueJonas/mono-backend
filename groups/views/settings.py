@@ -29,3 +29,17 @@ class GroupSettingsUpdateView(APIView):
             data=GroupSettingsSerializer(settings).data,
             message="Group settings updated successfully.",
         )
+
+
+class GroupSettingsIntegrityView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, group_id, version):
+        from django.shortcuts import get_object_or_404
+        from blockchain.services.group_anchor_service import GroupAnchorService
+        from groups.models import GroupSettings
+        from groups.services.group_member_service import GroupMemberService
+
+        GroupMemberService.ensure_active_member(group_id=group_id, user=request.user)
+        group_settings = get_object_or_404(GroupSettings, group_id=group_id, version=version)
+        return success(data=GroupAnchorService().verify_integrity(group_settings))
