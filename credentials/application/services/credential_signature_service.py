@@ -49,5 +49,5 @@ def verify_signature(document: dict) -> bool:
         payload = HashingService.canonicalize_json(unsigned).encode("utf-8")
         VerifyKey(public_key[2:]).verify(payload, signature)
         return True
-    except (KeyError, TypeError, ValueError, BadSignatureError, CryptoError, OverflowError):
+    except (KeyError, TypeError, ValueError, AttributeError, BadSignatureError, CryptoError, OverflowError):
         return False
