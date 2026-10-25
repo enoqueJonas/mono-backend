@@ -45,6 +45,8 @@ class VerifyCredentialService:
             return False
         if stored.issuer_did.did != credential["issuer"]:
             return False
+        if stored.credential_document != credential:
+            return False
         if stored.valid_until is not None and now >= stored.valid_until:
             return False
         return True
