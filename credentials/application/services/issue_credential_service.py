@@ -88,6 +88,16 @@ class IssueCredentialService:
             group_member_id=group_member_id,
         )
 
+        issuer = GroupMember.objects.filter(
+            id=issued_by_id,
+            group_id=context.group_member.group_id,
+            role=GroupMember.Role.MANAGER,
+            status=GroupMember.Status.ACTIVE,
+        ).first()
+        if issuer is None:
+            from credentials.exceptions import NotCredentialIssuer
+            raise NotCredentialIssuer()
+
         contributions = list(
             self._load_contributions(
                 group_member=context.group_member,
