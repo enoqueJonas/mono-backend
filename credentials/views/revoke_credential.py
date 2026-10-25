@@ -1,3 +1,4 @@
+from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -18,9 +19,10 @@ class RevokeCredentialView(APIView):
         serializer = RevokeCredentialSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        credential_to_revoke = VerifiableCredential.objects.select_related(
-            "group_member__group",
-        ).get(id=credential_id)
+        credential_to_revoke = get_object_or_404(
+            VerifiableCredential.objects.select_related('group_member__group'),
+            id=credential_id,
+        )
         GroupService.ensure_manager(
             group_id=credential_to_revoke.group_member.group_id,
             user=request.user,
@@ -29,6 +31,7 @@ class RevokeCredentialView(APIView):
         credential = RevokeCredentialService().revoke(
             credential_id=credential_id,
             reason=serializer.validated_data["reason"],
+            revoked_by=request.user,
         )
         return Response(
             {
