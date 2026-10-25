@@ -42,3 +42,20 @@ class GroupContributionCreateView(APIView):
             message="Contribution registered successfully.",
             status_code=201,
         )
+
+
+class ContributionIntegrityView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, group_id, contribution_id):
+        from django.shortcuts import get_object_or_404
+        from blockchain.services.contribution_anchor_service import ContributionAnchorService
+        from contributions.models import Contribution
+
+        GroupMemberService.ensure_active_member(group_id=group_id, user=request.user)
+        contribution = get_object_or_404(
+            Contribution.objects.select_related('member', 'group_settings'),
+            id=contribution_id,
+            member__group_id=group_id,
+        )
+        return success(data=ContributionAnchorService().verify_integrity(contribution))
