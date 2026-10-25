@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import timedelta
 from credentials.application.services.credential_signature_service import sign_credential
 from datetime import date
@@ -113,6 +113,10 @@ class IssueCredentialService:
             period_end=period_end,
         )
 
+        document = replace(
+            document,
+            expiration_date=document.issuance_date + timedelta(days=365),
+        )
         proof = sign_credential(document.to_dict(), context.group_did)
         document = document.with_proof(proof)
         credential_hash = self.hash_service.calculate(
