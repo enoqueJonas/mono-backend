@@ -59,3 +59,20 @@ class ContributionAnchorService:
                 else BlockchainAnchorStatus.FAILED
             ),
         )
+
+    def verify_integrity(self, contribution: Contribution) -> dict:
+        record = self.client.get_contribution(str(contribution.id))
+        calculated_hash = ContributionHashService.calculate(contribution)
+        stored_hash = record['contribution_hash'] if record['exists'] else None
+        if not record['exists']:
+            result = 'NOT_ANCHORED'
+        elif calculated_hash == stored_hash:
+            result = 'INTEGRITY_CONFIRMED'
+        else:
+            result = 'INTEGRITY_MISMATCH'
+        return {
+            'status': result,
+            'contribution_id': str(contribution.id),
+            'calculated_hash': calculated_hash,
+            'blockchain_hash': stored_hash,
+        }
