@@ -3,6 +3,7 @@ from groups.services.group_service import GroupService
 from credentials.infrastructure.repositories.django_credential_repository import (
     DjangoCredentialRepository,
 )
+from credentials.models import VerifiableCredential
 from credentials.domain.value_objects import (
     CredentialHash,
 )
@@ -46,6 +47,9 @@ class RevokeCredentialService:
             group_id=credential.group_member.group_id,
             user=revoked_by,
         )
+
+        if credential.status == VerifiableCredential.Status.REVOKED:
+            return credential
 
         self.anchor_service.revoke(
             CredentialHash(
