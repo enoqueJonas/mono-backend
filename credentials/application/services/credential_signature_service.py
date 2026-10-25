@@ -5,7 +5,7 @@ This is an application-specific proof format, not W3C Data Integrity/JCS.
 import base64
 
 import base58
-from nacl.exceptions import BadSignatureError
+from nacl.exceptions import BadSignatureError, CryptoError
 from nacl.signing import SigningKey, VerifyKey
 
 from blockchain.utils.hashing import HashingService
@@ -49,5 +49,5 @@ def verify_signature(document: dict) -> bool:
         payload = HashingService.canonicalize_json(unsigned).encode("utf-8")
         VerifyKey(public_key[2:]).verify(payload, signature)
         return True
-    except (KeyError, TypeError, ValueError, BadSignatureError):
+    except (KeyError, TypeError, ValueError, BadSignatureError, CryptoError, OverflowError):
         return False
