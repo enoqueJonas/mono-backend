@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from credentials.exceptions import (
     CredentialAlreadyExists,
+    CredentialHolderNotFound,
     CredentialSignatureFailed,
     InactiveCredentialHolder,
     InvalidCredentialPeriod,
