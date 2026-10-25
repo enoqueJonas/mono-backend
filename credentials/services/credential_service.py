@@ -38,7 +38,6 @@ class CredentialService:
     DEFAULT_VALIDITY_DAYS = 365
 
     @classmethod
-    @transaction.atomic
     def issue_contribution_credential(
         cls,
         *,
@@ -47,120 +46,17 @@ class CredentialService:
         period_start: date,
         period_end: date,
     ) -> VerifiableCredential:
+        """Compatibility entry point; all issuance uses the anchored signed flow."""
         cls._validate_issuer(
             group_member=group_member,
             issued_by=issued_by,
         )
-
-        cls._validate_period(
+        return IssueCredentialService().issue(
+            group_member_id=group_member.id,
+            issued_by_id=issued_by.id,
             period_start=period_start,
             period_end=period_end,
         )
-
-        if group_member.status != GroupMember.Status.ACTIVE:
-            raise InactiveCredentialHolder()
-
-        existing_credential = (
-            VerifiableCredential.objects.filter(
-                group_member=group_member,
-                credential_type=(
-                    VerifiableCredential
-                    .CredentialType
-                    .CONTRIBUTION_HISTORY
-                ),
-                period_start=period_start,
-                period_end=period_end,
-                status=VerifiableCredential.Status.ACTIVE,
-            )
-            .first()
-        )
-
-        if existing_credential is not None:
-            raise CredentialAlreadyExists()
-
-        issuer_did = cls._get_issuer_did(
-            group_member=group_member,
-        )
-
-        holder_did = cls._get_holder_did(
-            group_member=group_member,
-        )
-
-        history = ContributionHistorySelector.summarize(
-            group_member=group_member,
-            period_start=period_start,
-            period_end=period_end,
-        )
-
-        if history.confirmed_contributions == 0:
-            raise NoConfirmedContributions()
-
-        credential_id = uuid.uuid4()
-        valid_from = timezone.now()
-        valid_until = valid_from + timedelta(
-            days=cls.DEFAULT_VALIDITY_DAYS
-        )
-
-        unsigned_document = CredentialBuilder.build_unsigned(
-            data=CredentialBuildData(
-                credential_id=credential_id,
-                group_member=group_member,
-                issuer_did=issuer_did,
-                holder_did=holder_did,
-                period_start=period_start,
-                period_end=period_end,
-                valid_from=valid_from,
-                valid_until=valid_until,
-                confirmed_contributions=(
-                    history.confirmed_contributions
-                ),
-                total_contributed=history.total_contributed,
-                currency=history.currency,
-            )
-        )
-
-        signed = CredentialSigner.sign(
-            document=unsigned_document,
-            issuer_identity=issuer_did,
-            created_at=valid_from,
-        )
-
-        signature_is_valid = CredentialSigner.verify(
-            signed_document=signed.document,
-            issuer_identity=issuer_did,
-        )
-
-        if not signature_is_valid:
-            raise CredentialSignatureFailed()
-
-        credential_hash = calculate_sha256(
-            signed.document
-        )
-
-        try:
-            credential = VerifiableCredential.objects.create(
-                id=credential_id,
-                group_member=group_member,
-                issued_by=issued_by,
-                issuer_did=issuer_did,
-                holder_did=holder_did,
-                credential_type=(
-                    VerifiableCredential
-                    .CredentialType
-                    .CONTRIBUTION_HISTORY
-                ),
-                period_start=period_start,
-                period_end=period_end,
-                valid_from=valid_from,
-                valid_until=valid_until,
-                credential_document=signed.document,
-                credential_hash=credential_hash,
-                status=VerifiableCredential.Status.ACTIVE,
-            )
-        except IntegrityError as exc:
-            raise CredentialAlreadyExists() from exc
-
-        return credential
 
     @staticmethod
     def _validate_issuer(
