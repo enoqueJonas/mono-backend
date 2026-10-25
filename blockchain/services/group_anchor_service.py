@@ -76,3 +76,23 @@ class GroupAnchorService:
                 else BlockchainAnchorStatus.FAILED
             ),
         )
+
+    def verify_integrity(self, group_settings: GroupSettings) -> dict:
+        record = self.client.get_group_settings(
+            group_id=str(group_settings.group_id),
+            version=group_settings.version,
+        )
+        calculated_hash = GroupSettingsHashService.calculate(group_settings)
+        stored_hash = record['settings_hash'] if record['exists'] else None
+        if not record['exists']:
+            result = 'NOT_ANCHORED'
+        elif calculated_hash == stored_hash:
+            result = 'INTEGRITY_CONFIRMED'
+        else:
+            result = 'INTEGRITY_MISMATCH'
+        return {
+            'status': result,
+            'version': group_settings.version,
+            'calculated_hash': calculated_hash,
+            'blockchain_hash': stored_hash,
+        }
