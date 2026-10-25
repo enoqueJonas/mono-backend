@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
+from credentials.application.services.credential_signature_service import sign_credential
 from datetime import date
 from typing import Any
 from uuid import UUID, uuid4
@@ -111,6 +113,8 @@ class IssueCredentialService:
             period_end=period_end,
         )
 
+        proof = sign_credential(document.to_dict(), context.group_did)
+        document = document.with_proof(proof)
         credential_hash = self.hash_service.calculate(
             document
         )
