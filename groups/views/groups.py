@@ -90,3 +90,27 @@ class GroupDetailView(APIView):
             ).data,
             message="Group archived successfully.",
         )
+
+
+class GroupBlockchainHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, group_id):
+        from django.db.models import Q
+        from blockchain.models import BlockchainAnchor
+        from groups.services.group_member_service import GroupMemberService
+
+        GroupMemberService.ensure_active_member(group_id=group_id, user=request.user)
+        anchors = BlockchainAnchor.objects.filter(
+            Q(group_settings__group_id=group_id)
+            | Q(contribution__member__group_id=group_id)
+            | Q(credential__group_member__group_id=group_id)
+        ).order_by('-anchored_at')[:100]
+        return success(data=[{
+            'anchor_type': a.anchor_type,
+            'content_hash': a.content_hash,
+            'transaction_hash': a.transaction_hash,
+            'block_number': a.block_number,
+            'status': a.status,
+            'anchored_at': a.anchored_at,
+        } for a in anchors])
