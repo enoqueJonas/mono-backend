@@ -9,6 +9,10 @@ class DomainException(Exception):
         super().__init__(self.message)
 
 
+class PermissionDomainException(DomainException):
+    """Authenticated actor lacks permission for a domain operation."""
+
+
 class UserAlreadyExists(DomainException):
 
     default_message = "User already exists."
