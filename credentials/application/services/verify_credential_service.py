@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 
 from django.utils import timezone
 
@@ -46,6 +47,12 @@ class VerifyCredentialService:
         if stored.issuer_did.did != credential["issuer"]:
             return False
         if stored.credential_document != credential:
+            return False
+        try:
+            document_id = UUID(credential["id"].removeprefix("urn:uuid:"))
+        except (KeyError, AttributeError, TypeError, ValueError):
+            return False
+        if stored.id != document_id:
             return False
         if stored.valid_until is not None and now >= stored.valid_until:
             return False
