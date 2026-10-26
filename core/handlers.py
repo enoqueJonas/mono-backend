@@ -3,7 +3,7 @@ from rest_framework.views import exception_handler
 from rest_framework.response import Response
 from rest_framework import status
 
-from core.exceptions import DomainException
+from core.exceptions import DomainException, PermissionDomainException
 
 
 def custom_exception_handler(exc, context):
@@ -18,7 +18,11 @@ def custom_exception_handler(exc, context):
             {
                 "message": exc.message
             },
-            status=status.HTTP_400_BAD_REQUEST,
+            status=(
+                status.HTTP_403_FORBIDDEN
+                if isinstance(exc, PermissionDomainException)
+                else status.HTTP_400_BAD_REQUEST
+            ),
         )
     traceback.print_exc()
     return Response(
