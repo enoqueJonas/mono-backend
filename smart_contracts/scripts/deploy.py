@@ -77,9 +77,14 @@ def get_account():
 def main():
     account = get_account()
 
-    credential_registry = CredentialRegistry.deploy({"from": account})
-    group_registry = GroupRegistry.deploy({"from": account})
-    contribution_registry = ContributionRegistry.deploy({"from": account})
+    deployment_options = {
+        "from": account,
+        "gas_price": "2 gwei",
+    }
+
+    credential_registry = CredentialRegistry.deploy(deployment_options)
+    group_registry = GroupRegistry.deploy(deployment_options)
+    contribution_registry = ContributionRegistry.deploy(deployment_options)
 
     try:
         _copy_backend_abi("CredentialRegistry")
