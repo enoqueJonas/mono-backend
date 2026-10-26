@@ -1,5 +1,8 @@
 from pathlib import Path
+import os
 import shutil
+
+from brownie import web3
 
 from brownie import (
     ContributionRegistry,
@@ -65,6 +68,27 @@ def _update_backend_env(
             updated_lines.append(f"{key}={value}")
 
     env_file.write_text("\n".join(updated_lines) + "\n")
+    return values
+
+
+def _verify_backend_configuration(expected_addresses):
+    """Verify deployed bytecode and flag shell variables overriding .env."""
+    from web3 import Web3
+
+    for key, expected in expected_addresses.items():
+        address = Web3.to_checksum_address(expected)
+        if not web3.eth.get_code(address):
+            raise RuntimeError(f"{key}: no contract code at {address}")
+
+        override = os.environ.get(key)
+        if override and Web3.to_checksum_address(override) != address:
+            raise RuntimeError(
+                f"{key} is overridden by a stale environment variable. "
+                f"Unset {key} in the Django terminal and restart Django."
+            )
+        print(f"✓ {key}: contract verified at {address}")
+
+    print("✓ .env addresses verified on the Brownie network; restart Django to reload settings.")
 
 
 def get_account():
@@ -91,18 +115,20 @@ def main():
         _copy_backend_abi("GroupRegistry")
         _copy_backend_abi("ContributionRegistry")
 
-        _update_backend_env(
+        expected_addresses = _update_backend_env(
             credential_registry_address=credential_registry.address,
             group_registry_address=group_registry.address,
             contribution_registry_address=contribution_registry.address,
         )
+
+        _verify_backend_configuration(expected_addresses)
 
         print("✓ CredentialRegistry ABI copied")
         print("✓ GroupRegistry ABI copied")
         print("✓ ContributionRegistry ABI copied")
         print("✓ .env updated")
     except Exception as exc:
-        print(f"⚠ Backend synchronization failed: {exc}")
+        raise RuntimeError(f"Backend synchronization failed: {exc}") from exc
 
     print("=" * 60)
     print("Contracts deployed successfully")
@@ -116,7 +142,7 @@ def main():
     print("ContributionRegistry")
     print(f"Address : {contribution_registry.address}")
     print()
-    print("Backend updated")
+    print("Backend .env synchronized (restart Django to apply)")
     print("=" * 60)
 
     return {
