@@ -1,4 +1,4 @@
-from core.exceptions import DomainException
+from core.exceptions import DomainException, PermissionDomainException
 
 
 class InvalidCredentialPeriod(DomainException):
@@ -32,7 +32,7 @@ class MissingHolderDID(DomainException):
     )
 
 
-class NotCredentialIssuer(DomainException):
+class NotCredentialIssuer(PermissionDomainException):
     default_message = (
         "Only an active group manager can issue credentials."
     )
