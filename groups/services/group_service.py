@@ -3,7 +3,7 @@ from django.utils import timezone
 
 from accounts.models import User
 from accounts.utils.phone import normalize_mz_phone
-from core.exceptions import DomainException
+from core.exceptions import DomainException, PermissionDomainException
 from groups.models import Group, GroupMember, GroupSettings
 from identity.services.did_service import DIDService
 from blockchain.services.group_anchor_service import (
@@ -19,7 +19,7 @@ class UserNotFound(DomainException):
     default_message = "User not found."
 
 
-class NotGroupManager(DomainException):
+class NotGroupManager(PermissionDomainException):
     default_message = "Only group managers can perform this action."
 
 
