@@ -103,6 +103,12 @@ class CredentialSigner:
         ):
             return False
 
+        if proof.get("proofPurpose") != cls.PROOF_PURPOSE:
+            return False
+
+        if not isinstance(proof.get("created"), str):
+            return False
+
         proof_value = proof.get("proofValue")
 
         if not isinstance(proof_value, str):
@@ -134,7 +140,10 @@ class CredentialSigner:
 
         except (
             ValueError,
+            TypeError,
+            IndexError,
             BadSignatureError,
+            CredentialSignatureError,
         ):
             return False
 

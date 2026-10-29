@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, replace
+from datetime import date, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -25,6 +25,7 @@ from credentials.domain.value_objects import (
 )
 from credentials.exceptions import (
     CredentialAlreadyExists,
+    CredentialSignatureFailed,
     InactiveCredentialHolder,
     InvalidCredentialPeriod,
     MissingHolderDID,
@@ -36,6 +37,7 @@ from credentials.infrastructure.repositories import (
     DjangoCredentialRepository,
 )
 from credentials.models import VerifiableCredential
+from credentials.services.credential_signer import CredentialSigner
 from groups.models import GroupMember
 from identity.models import GroupDID, UserDID
 
@@ -56,7 +58,9 @@ class IssueCredentialService:
         anchor_service=None,
         credential_repository=None,
         blockchain_anchor_repository=None,
+        signer=None,
     ) -> None:
+        self.signer = signer or CredentialSigner()
         self.policy = policy or CredentialIssuancePolicy()
         self.factory = factory or CredentialDocumentFactory()
         self.hash_service = (
@@ -109,6 +113,19 @@ class IssueCredentialService:
             contributions=contributions,
             period_start=period_start,
             period_end=period_end,
+        )
+
+        # The signed document, not the unsigned payload, is the on-chain subject.
+        document = replace(
+            document,
+            valid_until=(
+                document.issuance_date
+                + timedelta(days=DjangoCredentialRepository.DEFAULT_VALIDITY_DAYS)
+            ),
+        )
+        document = self._sign_document(
+            document=document,
+            issuer_identity=context.group_did,
         )
 
         credential_hash = self.hash_service.calculate(
@@ -262,6 +279,28 @@ class IssueCredentialService:
             issuance_date=timezone.now(),
             contributions=contributions,
         )
+
+    def _sign_document(
+        self,
+        *,
+        document: CredentialDocument,
+        issuer_identity: GroupDID,
+    ) -> CredentialDocument:
+        signed = self.signer.sign(
+            document=document.to_dict(),
+            issuer_identity=issuer_identity,
+            created_at=document.issuance_date,
+        )
+        if not self.signer.verify(
+            signed_document=signed.document,
+            issuer_identity=issuer_identity,
+        ):
+            raise CredentialSignatureFailed()
+
+        proof = signed.document.get("proof")
+        if not isinstance(proof, dict):
+            raise CredentialSignatureFailed()
+        return replace(document, proof=proof)
 
     def _persist_issuance(
         self,

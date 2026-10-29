@@ -1,4 +1,5 @@
 from datetime import timedelta
+from uuid import UUID
 
 from django.utils import timezone
 
@@ -29,6 +30,8 @@ class DjangoCredentialRepository(
     ) -> VerifiableCredential:
 
         return VerifiableCredential.objects.create(
+            # The database ID must match the credential ID that was signed.
+            id=UUID(document.credential_id.removeprefix("urn:uuid:")),
             group_member=context.group_member,
             issued_by_id=issued_by_id,
             issuer_did=context.group_did,
@@ -37,7 +40,8 @@ class DjangoCredentialRepository(
             period_end=period_end,
             valid_from=document.issuance_date,
             valid_until=(
-                document.issuance_date
+                document.valid_until
+                or document.issuance_date
                 + timedelta(days=self.DEFAULT_VALIDITY_DAYS)
             ),
             credential_document=document.to_dict(),

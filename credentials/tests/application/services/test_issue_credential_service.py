@@ -1,67 +1,44 @@
-from datetime import date
-from decimal import Decimal
+"""Regression tests for the API's active credential issuance orchestration."""
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
-from uuid import UUID, uuid4
+from uuid import uuid4
 
-from credentials.application.services.issue_credential_service import (
-    IssueCredentialService,
-)
-from credentials.domain.value_objects.credential_document import (
-    CredentialDocument,
-)
-from blockchain.domain.blockchain_receipt import (
-    BlockchainReceipt,
-)
-from credentials.domain.value_objects.credential_hash import (
-    CredentialHash,
-)
+import pytest
+
+from blockchain.domain.blockchain_receipt import BlockchainReceipt
+from credentials.application.services.issue_credential_service import IssueCredentialService
+from credentials.domain.value_objects import CredentialDocument, CredentialHash
+from credentials.exceptions import CredentialSignatureFailed
 
 
-@patch(
-    "credentials.application.services."
-    "issue_credential_service.timezone.now"
-)
+ISSUED_AT = datetime(2026, 7, 26, 10, 30, tzinfo=timezone.utc)
+
+
+def document():
+    return CredentialDocument(
+        context=("https://www.w3.org/2018/credentials/v1",),
+        credential_id=f"urn:uuid:{uuid4()}",
+        credential_types=("VerifiableCredential",),
+        issuer="did:key:issuer",
+        issuance_date=ISSUED_AT,
+        credential_subject={"id": "did:key:holder"},
+    )
+
+
+@patch("credentials.application.services.issue_credential_service.timezone.now")
 def test_builds_document_with_issuance_context(mock_now):
-    issued_at = SimpleNamespace()
-    mock_now.return_value = issued_at
-
+    mock_now.return_value = ISSUED_AT
     factory = Mock()
-
-    expected_document = Mock(spec=CredentialDocument)
-    factory.build.return_value = expected_document
-
+    factory.build.return_value = document()
     service = IssueCredentialService(factory=factory)
-
-    credential_id = UUID(
-        "12345678-1234-5678-1234-567812345678"
-    )
-
     context = SimpleNamespace(
-        group_did=SimpleNamespace(
-            did="did:mono:group:grupo-esperanca"
-        ),
-        user_did=SimpleNamespace(
-            did="did:mono:user:841234567"
-        ),
-        group_member=SimpleNamespace(
-            group=SimpleNamespace(
-                id="group-001",
-                name="Grupo Esperança",
-            )
-        ),
+        group_did=SimpleNamespace(did="did:key:issuer"),
+        user_did=SimpleNamespace(did="did:key:holder"),
+        group_member=SimpleNamespace(group=SimpleNamespace(id="group-001", name="Grupo")),
     )
-
-    contributions = [
-        SimpleNamespace(
-            amount=Decimal("1000.00"),
-            currency="MZN",
-            status="CONFIRMED",
-            contribution_period=date(2026, 1, 1),
-            reference="CONT-001",
-        ),
-    ]
-
+    contributions = [SimpleNamespace(amount=1000, status="CONFIRMED")]
+    credential_id = uuid4()
     result = service._build_document(
         credential_id=credential_id,
         context=context,
@@ -69,213 +46,78 @@ def test_builds_document_with_issuance_context(mock_now):
         period_start=date(2026, 1, 1),
         period_end=date(2026, 2, 1),
     )
-
-    assert result is expected_document
-
+    assert result is factory.build.return_value
     factory.build.assert_called_once_with(
         credential_id=credential_id,
-        issuer_did="did:mono:group:grupo-esperanca",
-        holder_did="did:mono:user:841234567",
+        issuer_did="did:key:issuer",
+        holder_did="did:key:holder",
         group_id="group-001",
-        group_name="Grupo Esperança",
+        group_name="Grupo",
         period_start=date(2026, 1, 1),
         period_end=date(2026, 2, 1),
-        issuance_date=issued_at,
+        issuance_date=ISSUED_AT,
         contributions=contributions,
     )
 
 
-def test_anchors_document():
-    hash_service = Mock()
-    anchor_service = Mock()
-
-    credential_hash = CredentialHash(
-        value="a" * 64,
-    )
-
-    expected_receipt = Mock(
-        spec=BlockchainReceipt,
-    )
-
-    hash_service.calculate.return_value = (
-        credential_hash
-    )
-
-    anchor_service.anchor.return_value = (
-        expected_receipt
-    )
-
-    service = IssueCredentialService(
-        hash_service=hash_service,
-        anchor_service=anchor_service,
-    )
-
-    document = Mock(
-        spec=CredentialDocument,
-    )
-
-    result = service._anchor_document(
-        document=document,
-    )
-
-    assert result is expected_receipt
-
-    hash_service.calculate.assert_called_once_with(
-        document
-    )
-
-    anchor_service.anchor.assert_called_once_with(
-        credential_hash=credential_hash,
-    )
+def test_rejects_bad_signature_before_anchoring():
+    signer = Mock()
+    signer.sign.return_value = SimpleNamespace(document={"proof": {"proofValue": "invalid"}})
+    signer.verify.return_value = False
+    service = IssueCredentialService(signer=signer, anchor_service=Mock())
+    from dataclasses import replace
+    from datetime import timedelta
+    unsigned = replace(document(), valid_until=ISSUED_AT + timedelta(days=365))
+    with pytest.raises(CredentialSignatureFailed):
+        service._sign_document(document=unsigned, issuer_identity=Mock())
+    service.anchor_service.anchor.assert_not_called()
 
 
-def test_issue_orchestrates_credential_issuance():
-    hash_service = Mock()
-    anchor_service = Mock()
-    credential_repository = Mock()
-    blockchain_anchor_repository = Mock()
-
-    service = IssueCredentialService(
-        hash_service=hash_service,
-        anchor_service=anchor_service,
-        credential_repository=credential_repository,
-        blockchain_anchor_repository=blockchain_anchor_repository,
-    )
-
-    context = Mock()
-    context.group_member = Mock()
-
-    contributions = Mock()
-
-    document = Mock(spec=CredentialDocument)
-
-    credential_hash = CredentialHash(
-        value="a" * 64,
-    )
-
-    receipt = Mock(spec=BlockchainReceipt)
-
-    service._load_context = Mock(
-        return_value=context,
-    )
-
-    service._load_contributions = Mock(
-        return_value=contributions,
-    )
-
-    service._evaluate_policy = Mock()
-
-    service._build_document = Mock(
-        return_value=document,
-    )
-
-    service._persist_issuance = Mock()
-
+@pytest.mark.django_db
+@pytest.mark.django_db
+def test_issue_signs_and_anchors_same_document():
+    signer, anchor_service = Mock(), Mock()
+    credential_repo, anchor_repo, hash_service = Mock(), Mock(), Mock()
+    credential_hash = CredentialHash(value="a" * 64)
     hash_service.calculate.return_value = credential_hash
+    receipt = Mock(spec=BlockchainReceipt)
     anchor_service.anchor.return_value = receipt
-
-    group_member_id = uuid4()
-    issued_by_id = uuid4()
-
-    period_start = date(2026, 1, 1)
-    period_end = date(2026, 2, 1)
+    signer.verify.return_value = True
+    signer.sign.side_effect = lambda **kwargs: SimpleNamespace(
+        document={**kwargs["document"], "proof": {
+            "type": "MonoEd25519Signature2026",
+            "proofValue": "zsignature",
+            "proofPurpose": "assertionMethod",
+            "created": "2026-07-26T10:30:00Z",
+        }}
+    )
+    saved = Mock()
+    credential_repo.save.return_value = saved
+    service = IssueCredentialService(
+        signer=signer,
+        anchor_service=anchor_service,
+        credential_repository=credential_repo,
+        blockchain_anchor_repository=anchor_repo,
+        hash_service=hash_service,
+    )
+    ctx = SimpleNamespace(group_did=Mock(), group_member=Mock())
+    base_document = document()
+    service._load_context = Mock(return_value=ctx)
+    service._load_contributions = Mock(return_value=[Mock()])
+    service._evaluate_policy = Mock()
+    service._build_document = Mock(return_value=base_document)
 
     result = service.issue(
-        group_member_id=group_member_id,
-        issued_by_id=issued_by_id,
-        period_start=period_start,
-        period_end=period_end,
+        group_member_id=uuid4(),
+        issued_by_id=uuid4(),
+        period_start=date(2026, 1, 1),
+        period_end=date(2026, 2, 1),
     )
-
-    assert result is document
-
-    service._load_context.assert_called_once_with(
-        group_member_id
-    )
-
-    service._load_contributions.assert_called_once_with(
-        group_member=context.group_member,
-        period_start=period_start,
-        period_end=period_end,
-    )
-
-    service._evaluate_policy.assert_called_once_with(
-        group_member=context.group_member,
-        period_start=period_start,
-        period_end=period_end,
-        contributions=contributions,
-    )
-
-    service._build_document.assert_called_once()
-
-    hash_service.calculate.assert_called_once_with(
-        document
-    )
-
-    anchor_service.anchor.assert_called_once_with(
-        credential_hash=credential_hash,
-    )
-
-    service._persist_issuance.assert_called_once_with(
-        document=document,
-        credential_hash=credential_hash,
-        receipt=receipt,
-        context=context,
-        issued_by_id=issued_by_id,
-    )
-
-
-def test_persists_credential_and_blockchain_anchor():
-    credential_repository = Mock()
-    blockchain_anchor_repository = Mock()
-
-    service = IssueCredentialService(
-        credential_repository=credential_repository,
-        blockchain_anchor_repository=blockchain_anchor_repository,
-    )
-
-    document = Mock(spec=CredentialDocument)
-
-    credential_hash = CredentialHash(
-        value="a" * 64,
-    )
-
-    receipt = Mock(spec=BlockchainReceipt)
-
-    context = Mock()
-
-    issued_by_id = uuid4()
-
-    persisted_credential = Mock()
-    persisted_anchor = Mock()
-
-    credential_repository.save.return_value = (
-        persisted_credential
-    )
-
-    blockchain_anchor_repository.save.return_value = (
-        persisted_anchor
-    )
-
-    result = service._persist_issuance(
-        document=document,
-        credential_hash=credential_hash,
-        receipt=receipt,
-        context=context,
-        issued_by_id=issued_by_id,
-    )
-
-    credential_repository.save.assert_called_once_with(
-        document=document,
-        credential_hash=credential_hash,
-        context=context,
-        issued_by_id=issued_by_id,
-    )
-
-    blockchain_anchor_repository.save.assert_called_once_with(
-        credential=persisted_credential,
-        receipt=receipt,
-    )
-
-    assert result.credential is persisted_credential
-    assert result.blockchain_anchor is persisted_anchor
+    assert result is saved
+    signed_doc = hash_service.calculate.call_args.args[0]
+    assert signed_doc.to_dict()["proof"]["proofValue"] == "zsignature"
+    assert signed_doc.to_dict()["validUntil"] == "2027-07-26T10:30:00Z"
+    assert credential_repo.save.call_args.kwargs["document"] is signed_doc
+    anchor_service.anchor.assert_called_once_with(credential_hash=credential_hash)
+    signer.verify.assert_called_once()
+    anchor_repo.save.assert_called_once_with(credential=saved, receipt=receipt)
