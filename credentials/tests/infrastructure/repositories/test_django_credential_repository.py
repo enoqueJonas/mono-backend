@@ -1,58 +1,48 @@
-from datetime import date
-from decimal import Decimal
+"""Repository persistence must keep the same identity as the signed VC."""
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from uuid import uuid4
+from unittest.mock import patch
+from uuid import UUID
 
-import pytest
-
-from credentials.infrastructure.repositories import (
-    DjangoCredentialRepository,
-)
-from credentials.models import VerifiableCredential
+from credentials.domain.value_objects import CredentialDocument, CredentialHash
+from credentials.infrastructure.repositories import DjangoCredentialRepository
 
 
-@pytest.mark.django_db
-def test_saves_credential():
-    repository = DjangoCredentialRepository()
-
-    issued_by = SimpleNamespace(
-        id=uuid4(),
+def test_persists_same_id_hash_document_and_expiry():
+    issued_at = datetime(2026, 7, 26, 10, 30, tzinfo=timezone.utc)
+    credential_id = UUID("12345678-1234-5678-1234-567812345678")
+    document = CredentialDocument(
+        context=("https://www.w3.org/2018/credentials/v1",),
+        credential_id=f"urn:uuid:{credential_id}",
+        credential_types=("VerifiableCredential",),
+        issuer="did:key:issuer",
+        issuance_date=issued_at,
+        credential_subject={"id": "did:key:holder"},
+        valid_until=issued_at + timedelta(days=365),
+        proof={"type": "MonoEd25519Signature2026", "proofValue": "ztest"},
     )
-
     context = SimpleNamespace(
-        group_member=SimpleNamespace(
-            user=SimpleNamespace(
-                id=uuid4(),
-            ),
-            group=SimpleNamespace(
-                id=uuid4(),
-            ),
+        group_member=SimpleNamespace(),
+        group_did=SimpleNamespace(),
+        user_did=SimpleNamespace(),
+    )
+    hash_value = CredentialHash(value="a" * 64)
+    with patch(
+        "credentials.infrastructure.repositories.django_credential_repository."
+        "VerifiableCredential.objects.create"
+    ) as create:
+        DjangoCredentialRepository().save(
+            document=document,
+            credential_hash=hash_value,
+            context=context,
+            issued_by_id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+            period_start=issued_at.date(),
+            period_end=(issued_at + timedelta(days=10)).date(),
         )
-    )
 
-    document = SimpleNamespace(
-        id=uuid4(),
-        issuer_did="did:mono:group:001",
-        holder_did="did:mono:user:001",
-        issuance_date=date.today(),
-        period_start=date(2026, 1, 1),
-        period_end=date(2026, 2, 1),
-        contributions=[
-            SimpleNamespace(
-                amount=Decimal("100"),
-            )
-        ],
-    )
-
-    credential = repository.save(
-        document=document,
-        context=context,
-        issued_by_id=issued_by.id,
-    )
-
-    assert isinstance(
-        credential,
-        VerifiableCredential,
-    )
-
-    assert VerifiableCredential.objects.count() == 1
+    saved = create.call_args.kwargs
+    assert saved["id"] == credential_id
+    assert saved["credential_hash"] == hash_value.value
+    assert saved["credential_document"] == document.to_dict()
+    assert saved["valid_from"] == issued_at
+    assert saved["valid_until"] == document.valid_until

@@ -20,5 +20,7 @@ class CredentialRepository(Protocol):
         context: CredentialIssuanceContext,
         issued_by_id: UUID,
         credential_hash: CredentialHash,
+        period_start,
+        period_end,
     ):
         """Persist a credential."""

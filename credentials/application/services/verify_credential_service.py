@@ -48,11 +48,14 @@ class VerifyCredentialService:
             return False
         issuer_did = credential.get("issuer")
         subject = credential.get("credentialSubject")
+        types = credential.get("type")
         proof = credential.get("proof")
         if (
             not isinstance(issuer_did, str)
             or not issuer_did
             or not isinstance(subject, dict)
+            or not isinstance(types, list)
+            or "VerifiableCredential" not in types
             or not isinstance(proof, dict)
         ):
             return False

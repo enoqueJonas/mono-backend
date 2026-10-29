@@ -13,6 +13,7 @@ def make_credential(*, expiry_days=3):
     return {
         "@context": ["https://www.w3.org/2018/credentials/v1"],
         "id": "urn:uuid:123",
+        "type": ["VerifiableCredential", "ContributionHistoryCredential"],
         "issuer": "did:key:issuer",
         "issuanceDate": (now - timedelta(days=1)).isoformat().replace("+00:00", "Z"),
         "validUntil": (now + timedelta(days=expiry_days)).isoformat().replace("+00:00", "Z"),
