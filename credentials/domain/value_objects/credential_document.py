@@ -14,6 +14,8 @@ class CredentialDocument:
     issuance_date: datetime
     credential_subject: Mapping[str, Any]
     evidence: Mapping[str, Any] | None = None
+    valid_until: datetime | None = None
+    proof: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if not self.context:
@@ -34,6 +36,12 @@ class CredentialDocument:
         if not self.credential_subject:
             raise ValueError("Credential subject cannot be empty.")
 
+        if self.valid_until is not None:
+            if self.valid_until.tzinfo is None:
+                raise ValueError("Valid-until date must be timezone-aware.")
+            if self.valid_until <= self.issuance_date:
+                raise ValueError("Valid-until must be after issuance.")
+
     def to_dict(self) -> dict[str, Any]:
         document: dict[str, Any] = {
             "@context": list(self.context),
@@ -46,6 +54,12 @@ class CredentialDocument:
 
         if self.evidence is not None:
             document["evidence"] = dict(self.evidence)
+
+        if self.valid_until is not None:
+            document["validUntil"] = self._format_datetime(self.valid_until)
+
+        if self.proof is not None:
+            document["proof"] = dict(self.proof)
 
         return document
 

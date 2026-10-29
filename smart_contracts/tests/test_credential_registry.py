@@ -98,3 +98,23 @@ def test_reads_existing_credential(
     assert revoked is False
     assert anchored_at > 0
     assert anchored_by == owner
+
+
+def test_revocation_does_not_remove_hash_but_marks_status(
+    registry, owner, credential_hash,
+):
+    registry.registerCredentialHash(credential_hash, {"from": owner})
+    tx = registry.revokeCredential(credential_hash, {"from": owner})
+    assert tx.status == 1
+    assert registry.credentialExists(credential_hash) is True
+    exists, revoked, *_ = registry.getCredential(credential_hash)
+    assert exists is True
+    assert revoked is True
+    assert "CredentialRevoked" in tx.events
+
+
+def test_rejects_second_revocation(registry, owner, credential_hash):
+    registry.registerCredentialHash(credential_hash, {"from": owner})
+    registry.revokeCredential(credential_hash, {"from": owner})
+    with reverts():
+        registry.revokeCredential(credential_hash, {"from": owner})

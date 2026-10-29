@@ -37,7 +37,8 @@ class DjangoCredentialRepository(
             period_end=period_end,
             valid_from=document.issuance_date,
             valid_until=(
-                document.issuance_date
+                document.valid_until
+                or document.issuance_date
                 + timedelta(days=self.DEFAULT_VALIDITY_DAYS)
             ),
             credential_document=document.to_dict(),
