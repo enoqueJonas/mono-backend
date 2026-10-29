@@ -21,6 +21,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install eth-brownie==1.21.0
           npm install --global ganache-cli@6.12.2
+          mkdir -p "$HOME/.solcx"
+          curl --fail --location --silent --show-error --retry 3 \
+            "https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.8.20+commit.a1b79de6" \
+            --output "$HOME/.solcx/solc-v0.8.20"
+          chmod +x "$HOME/.solcx/solc-v0.8.20"
+          "$HOME/.solcx/solc-v0.8.20" --version
           brownie --version
           ganache-cli --version
       - name: Run Solidity contract tests (Brownie)
