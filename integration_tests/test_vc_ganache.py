@@ -188,18 +188,14 @@ def test_signed_vc_emission_verification_revocation_on_ganache():
         reference="AUDIT-CONTRIB-002", contribution_period=date(2026, 9, 1),
     )
 
-    captured = {}
-
-    def fail_after_chain(**kwargs):
-        captured["hash"] = kwargs["credential_hash"].value
-        raise RuntimeError("INJECTED: PostgreSQL write failed after on-chain confirmation")
-
+    # PostgreSQL finalize fails *after* the contract accepts the signed hash.
+    # The durable PENDING intent must survive to make reconciliation possible.
     client.force_authenticate(user=manager)
     client.raise_request_exception = False
     with patch(
-        "credentials.application.services.issue_credential_service."
-        "IssueCredentialService._persist_issuance",
-        side_effect=fail_after_chain,
+        "credentials.infrastructure.repositories."
+        "django_blockchain_anchor_repository.BlockchainAnchor.objects.create",
+        side_effect=RuntimeError("INJECTED: DB finalize failed after anchoring"),
     ):
         failed_issue = client.post(
             f"/api/v1/credentials/{group.id}/credentials/",
@@ -213,18 +209,50 @@ def test_signed_vc_emission_verification_revocation_on_ganache():
     client.raise_request_exception = True
 
     assert failed_issue.status_code == 500
-    assert "hash" in captured
-    on_chain_without_db = contract.functions.credentialExists(
-        bytes.fromhex(captured["hash"])
+    pending = VerifiableCredential.objects.get(group_member=second_membership)
+    assert pending.status == VerifiableCredential.Status.PENDING
+    on_chain = contract.functions.credentialExists(
+        bytes.fromhex(pending.credential_hash)
     ).call()
-    local_record_missing = not VerifiableCredential.objects.filter(
-        group_member=second_membership
-    ).exists()
-    assert on_chain_without_db is True
-    assert local_record_missing is True
+    assert on_chain is True
+    assert pending.anchors.count() == 0
+
+    # Resume from the exact signed document and the existing on-chain event.
+    # No new blockchain transaction should be sent.
+    from credentials.application.services.reconcile_credential_issuance_service import (
+        ReconcileCredentialIssuanceService,
+    )
+
+    events_before = contract.events.CredentialAnchored().get_logs(
+        from_block=0,
+        to_block="latest",
+        argument_filters={"credentialHash": bytes.fromhex(pending.credential_hash)},
+    )
+    assert len(events_before) == 1
+
+    recovered = ReconcileCredentialIssuanceService().reconcile(
+        credential_id=pending.id
+    )
+    recovered.refresh_from_db()
+    assert recovered.status == VerifiableCredential.Status.ACTIVE
+    assert recovered.anchors.count() == 1
+    assert recovered.anchors.first().transaction_hash == events_before[0]["transactionHash"].hex()
+
+    events_after = contract.events.CredentialAnchored().get_logs(
+        from_block=0,
+        to_block="latest",
+        argument_filters={"credentialHash": bytes.fromhex(pending.credential_hash)},
+    )
+    assert len(events_after) == 1
+    assert (
+        ReconcileCredentialIssuanceService().reconcile(credential_id=pending.id).id
+        == pending.id
+    )
+    assert recovered.anchors.count() == 1
     print(
-        f"CONSISTENCY_GAP_REPRODUCED hash={captured['hash']}"
-        " chain_confirmed=True local_record_missing=True"
+        f"CONSISTENCY_RECOVERY hash={pending.credential_hash}"
+        " chain_confirmed=True intent_durable=True reconciled=True"
+        " duplicate_anchoring=False"
     )
 
     # Evidence summary is intentionally test-only; never log private keys/PII.
