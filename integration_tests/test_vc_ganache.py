@@ -138,6 +138,19 @@ def test_signed_vc_emission_verification_revocation_on_ganache():
     assert tampered_response.status_code == 200
     assert tampered_response.data["data"]["valid"] is False
 
+    # A holder must not be able to revoke their own credential.
+    # Reject before sending a transaction to Ganache.
+    client.force_authenticate(user=holder)
+    denied = client.post(
+        f"/api/v1/credentials/{record.id}/revoke/",
+        {"reason": "unauthorised"}, format="json"
+    )
+    assert denied.status_code == 403, denied.data
+    before_authorised_revoke = contract.functions.getCredential(
+        bytes.fromhex(record.credential_hash)
+    ).call()
+    assert before_authorised_revoke[1] is False
+
     client.force_authenticate(user=manager)
     revoked_response = client.post(
         f"/api/v1/credentials/{record.id}/revoke/",

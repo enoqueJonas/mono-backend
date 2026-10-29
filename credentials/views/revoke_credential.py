@@ -1,4 +1,5 @@
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -11,6 +12,7 @@ from credentials.serializers.revoke_credential import (
 
 
 class RevokeCredentialView(APIView):
+    permission_classes = [IsAuthenticated]
     def post(
         self,
         request,
@@ -29,6 +31,7 @@ class RevokeCredentialView(APIView):
         credential = (
             RevokeCredentialService().revoke(
                 credential_id=credential_id,
+                actor=request.user,
                 reason=serializer.validated_data[
                     "reason"
                 ],
