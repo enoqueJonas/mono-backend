@@ -1,0 +1,4 @@
+# Installation for the Python/Django test suite; smart-contract tests use Brownie separately.
+-r requirements.txt
+pytest>=8,<10
+pytest-django>=4.11,<6
