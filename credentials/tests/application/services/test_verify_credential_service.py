@@ -62,7 +62,7 @@ def test_invalid_status_or_issuer_is_rejected(flag):
 
 def test_expired_credential_is_rejected_without_chain_query():
     service, anchor = make_service()
-    assert service.verify(credential=make_credential(expiry_days=-2)) is False
+    assert service.verify(credential=make_credential(expiry_days=-0.5)) is False
     anchor.get_credential.assert_not_called()
 
 
