@@ -18,9 +18,8 @@ class RevokeCredentialService:
             if credential_repository is not None
             else DjangoCredentialRepository()
         )
-        self.anchor_service = (
-            anchor_service if anchor_service is not None else AnchorService()
-        )
+        # Delay the network connection until authorization has succeeded.
+        self.anchor_service = anchor_service
 
     def revoke(self, *, credential_id, actor, reason: str = ""):
         # Retrieve only by ID, then check manager membership before touching the chain.
@@ -45,7 +44,8 @@ class RevokeCredentialService:
         if credential.status == VerifiableCredential.Status.REVOKED:
             raise ValidationError("Credential is already revoked.")
 
-        self.anchor_service.revoke(
+        blockchain = self.anchor_service or AnchorService()
+        blockchain.revoke(
             CredentialHash(value=credential.credential_hash)
         )
         return self.credential_repository.revoke(
