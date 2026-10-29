@@ -1,6 +1,11 @@
+import hashlib
+import hmac
+import json
+import time
 from decimal import Decimal
 from unittest.mock import patch
 
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -14,6 +19,10 @@ from groups.models import (
 )
 
 
+@override_settings(
+    MOBILE_WALLET_WEBHOOK_ENABLED=True,
+    MOBILE_WALLET_WEBHOOK_SECRET="test-secret-not-for-production",
+)
 class MobileWalletWebhookAPITests(APITestCase):
 
     def setUp(self):
@@ -81,14 +90,25 @@ class MobileWalletWebhookAPITests(APITestCase):
             "reference": "WALLET-API-001",
         }
 
+    def signed_post(self, payload, *, timestamp=None, secret="test-secret-not-for-production"):
+        raw = json.dumps(
+            payload, ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")
+        stamp = str(int(time.time())) if timestamp is None else str(timestamp)
+        signature = hmac.new(
+            secret.encode("utf-8"), stamp.encode("ascii") + b"." + raw,
+            hashlib.sha256,
+        ).hexdigest()
+        return self.client.post(
+            self.url, raw, content_type="application/json",
+            HTTP_X_MONO_TIMESTAMP=stamp,
+            HTTP_X_MONO_SIGNATURE=signature,
+        )
+
     def test_wallet_can_register_contribution(
         self,
     ):
-        response = self.client.post(
-            self.url,
-            self.payload(),
-            format="json",
-        )
+        response = self.signed_post(self.payload())
 
         self.assertEqual(
             response.status_code,
@@ -122,11 +142,7 @@ class MobileWalletWebhookAPITests(APITestCase):
         payload = self.payload()
         payload["amount"] = "500.00"
 
-        response = self.client.post(
-            self.url,
-            payload,
-            format="json",
-        )
+        response = self.signed_post(payload)
 
         self.assertEqual(
             response.status_code,
@@ -143,11 +159,7 @@ class MobileWalletWebhookAPITests(APITestCase):
         payload = self.payload()
         payload["currency"] = "USD"
 
-        response = self.client.post(
-            self.url,
-            payload,
-            format="json",
-        )
+        response = self.signed_post(payload)
 
         self.assertEqual(
             response.status_code,
@@ -163,17 +175,9 @@ class MobileWalletWebhookAPITests(APITestCase):
     ):
         payload = self.payload()
 
-        first_response = self.client.post(
-            self.url,
-            payload,
-            format="json",
-        )
+        first_response = self.signed_post(payload)
 
-        second_response = self.client.post(
-            self.url,
-            payload,
-            format="json",
-        )
+        second_response = self.signed_post(payload)
 
         self.assertEqual(
             first_response.status_code,
@@ -193,13 +197,9 @@ class MobileWalletWebhookAPITests(APITestCase):
     def test_wallet_requires_mandatory_fields(
         self,
     ):
-        response = self.client.post(
-            self.url,
-            {
+        response = self.signed_post({
                 "reference": "WALLET-API-002",
-            },
-            format="json",
-        )
+            })
 
         self.assertEqual(
             response.status_code,
@@ -209,3 +209,28 @@ class MobileWalletWebhookAPITests(APITestCase):
         self.assertFalse(
             Contribution.objects.exists()
         )
+
+    def test_wallet_rejects_unsigned_confirmation(self):
+        response = self.client.post(
+            self.url, self.payload(), format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(Contribution.objects.exists())
+
+    def test_wallet_rejects_wrong_signature(self):
+        response = self.signed_post(self.payload(), secret="wrong-secret")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(Contribution.objects.exists())
+
+    def test_wallet_rejects_stale_timestamp(self):
+        response = self.signed_post(
+            self.payload(), timestamp=int(time.time()) - 700
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(Contribution.objects.exists())
+
+    @override_settings(MOBILE_WALLET_WEBHOOK_ENABLED=False)
+    def test_wallet_disabled_by_default(self):
+        response = self.signed_post(self.payload())
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(Contribution.objects.exists())
