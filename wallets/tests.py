@@ -1,4 +1,5 @@
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.urls import reverse
 from rest_framework import status
@@ -16,6 +17,13 @@ from groups.models import (
 class MobileWalletWebhookAPITests(APITestCase):
 
     def setUp(self):
+        # Mock only the blockchain boundary in these API-level tests.
+        self.anchor_patcher = patch(
+            "contributions.services.contribution_service.ContributionAnchorService"
+        )
+        self.mock_anchor_service = self.anchor_patcher.start()
+        self.addCleanup(self.anchor_patcher.stop)
+
         self.user = User.objects.create_user(
             phone_number="+258843030303",
             password="test1234",
@@ -99,6 +107,10 @@ class MobileWalletWebhookAPITests(APITestCase):
         self.assertEqual(
             contribution.status,
             Contribution.Status.CONFIRMED,
+        )
+
+        self.mock_anchor_service.return_value.anchor.assert_called_once_with(
+            contribution
         )
 
         self.assertEqual(
