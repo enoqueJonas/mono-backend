@@ -11,6 +11,7 @@ from copy import deepcopy
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from django.conf import settings
@@ -168,6 +169,63 @@ def test_signed_vc_emission_verification_revocation_on_ganache():
     )
     assert after_revoke.status_code == 200
     assert after_revoke.data["data"]["valid"] is False
+
+    # Fault injection: the transaction on chain succeeds, but the SQL
+    # persistence step fails. Reproduce and quantify the existing gap.
+    second_holder = User.objects.create_user(
+        phone_number="+258841000003", password="test-strong-password"
+    )
+    second_membership = GroupMember.objects.create(
+        group=group, user=second_holder,
+        role=GroupMember.Role.MEMBER, status=GroupMember.Status.ACTIVE,
+    )
+    DIDService.create_for_user(user=second_holder)
+    Contribution.objects.create(
+        member=second_membership, group_settings=group_settings,
+        amount=Decimal("1000.00"), currency="MZN",
+        status=Contribution.Status.CONFIRMED,
+        source=Contribution.Source.MANUAL,
+        reference="AUDIT-CONTRIB-002", contribution_period=date(2026, 9, 1),
+    )
+
+    captured = {}
+
+    def fail_after_chain(**kwargs):
+        captured["hash"] = kwargs["credential_hash"].value
+        raise RuntimeError("INJECTED: PostgreSQL write failed after on-chain confirmation")
+
+    client.force_authenticate(user=manager)
+    client.raise_request_exception = False
+    with patch(
+        "credentials.application.services.issue_credential_service."
+        "IssueCredentialService._persist_issuance",
+        side_effect=fail_after_chain,
+    ):
+        failed_issue = client.post(
+            f"/api/v1/credentials/{group.id}/credentials/",
+            {
+                "group_member_id": str(second_membership.id),
+                "period_start": "2026-09-01",
+                "period_end": "2026-09-30",
+            },
+            format="json",
+        )
+    client.raise_request_exception = True
+
+    assert failed_issue.status_code == 500
+    assert "hash" in captured
+    on_chain_without_db = contract.functions.credentialExists(
+        bytes.fromhex(captured["hash"])
+    ).call()
+    local_record_missing = not VerifiableCredential.objects.filter(
+        group_member=second_membership
+    ).exists()
+    assert on_chain_without_db is True
+    assert local_record_missing is True
+    print(
+        f"CONSISTENCY_GAP_REPRODUCED hash={captured['hash']}"
+        " chain_confirmed=True local_record_missing=True"
+    )
 
     # Evidence summary is intentionally test-only; never log private keys/PII.
     print(
