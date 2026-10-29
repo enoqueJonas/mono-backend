@@ -1,0 +1,41 @@
+name: VC Ganache integration
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  vc-ganache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          npm install --no-save ganache@7.9.2
+      - name: Start ephemeral Ganache with funded test account
+        run: |
+          ./node_modules/.bin/ganache \
+            --server.host 127.0.0.1 \
+            --server.port 8545 \
+            --chain.chainId 1337 \
+            --wallet.accounts="0x0000000000000000000000000000000000000000000000000000000000000001,100000000000000000000" \
+            > /tmp/ganache-mono-audit.log 2>&1 &
+          echo $! > /tmp/ganache-mono-audit.pid
+      - name: Run real Ganache contract and Django API lifecycle
+        env:
+          BLOCKCHAIN_RPC_URL: http://127.0.0.1:8545
+        run: |
+          python -m pytest integration_tests/test_vc_ganache.py -q -s
+      - name: Show node diagnostics on failure
+        if: failure()
+        run: tail -n 80 /tmp/ganache-mono-audit.log || true
