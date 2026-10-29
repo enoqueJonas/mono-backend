@@ -73,6 +73,7 @@ def test_rejects_bad_signature_before_anchoring():
     service.anchor_service.anchor.assert_not_called()
 
 
+@pytest.mark.django_db
 def test_issue_signs_and_anchors_same_document():
     signer, anchor_service = Mock(), Mock()
     credential_repo, anchor_repo, hash_service = Mock(), Mock(), Mock()
