@@ -21,7 +21,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install eth-brownie==1.21.0
           npm install --global ganache@7.9.2
-          ln -s "$(command -v ganache)" "$(dirname "$(command -v ganache)")/ganache-cli"
           mkdir -p "$HOME/.solcx"
           curl --fail --location --silent --show-error --retry 3 \
             "https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.8.20+commit.a1b79de6" \
