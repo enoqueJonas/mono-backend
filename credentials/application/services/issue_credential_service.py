@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from datetime import date, timedelta
-from typing import Any
 from uuid import UUID, uuid4
 
 from django.db import transaction
@@ -42,12 +41,6 @@ from groups.models import GroupMember
 from identity.models import GroupDID, UserDID
 
 
-@dataclass(frozen=True)
-class PersistedCredentialIssuance:
-    credential: Any
-    blockchain_anchor: Any
-
-
 class IssueCredentialService:
     def __init__(
         self,
@@ -77,7 +70,6 @@ class IssueCredentialService:
             or DjangoBlockchainAnchorRepository()
         )
 
-    @transaction.atomic
     def issue(
         self,
         *,
@@ -86,70 +78,55 @@ class IssueCredentialService:
         period_start: date,
         period_end: date,
     ) -> VerifiableCredential:
-        context = self._load_context(
-            group_member_id=group_member_id,
-        )
-
-        contributions = list(
-            self._load_contributions(
+        # Phase 1: commit the signed document and its hash before any
+        # irreversible blockchain transaction.
+        with transaction.atomic():
+            context = self._load_context(group_member_id=group_member_id)
+            contributions = list(self._load_contributions(
                 group_member=context.group_member,
                 period_start=period_start,
                 period_end=period_end,
+            ))
+            self._evaluate_policy(
+                group_member=context.group_member,
+                period_start=period_start,
+                period_end=period_end,
+                contributions=contributions,
             )
-        )
+            document = self._build_document(
+                credential_id=uuid4(),
+                context=context,
+                contributions=contributions,
+                period_start=period_start,
+                period_end=period_end,
+            )
+            document = replace(
+                document,
+                valid_until=(
+                    document.issuance_date
+                    + timedelta(days=DjangoCredentialRepository.DEFAULT_VALIDITY_DAYS)
+                ),
+            )
+            document = self._sign_document(
+                document=document, issuer_identity=context.group_did
+            )
+            credential_hash = self.hash_service.calculate(document)
+            prepared = self.credential_repository.save(
+                document=document,
+                credential_hash=credential_hash,
+                context=context,
+                issued_by_id=issued_by_id,
+                period_start=period_start,
+                period_end=period_end,
+            )
 
-        self._evaluate_policy(
-            group_member=context.group_member,
-            period_start=period_start,
-            period_end=period_end,
-            contributions=contributions,
-        )
+        # Phase 2: irreversible ledger transaction; PENDING survives failure.
+        blockchain = self.anchor_service or AnchorService()
+        receipt = blockchain.anchor(credential_hash=credential_hash)
 
-        credential_id = uuid4()
-
-        document = self._build_document(
-            credential_id=credential_id,
-            context=context,
-            contributions=contributions,
-            period_start=period_start,
-            period_end=period_end,
-        )
-
-        # The signed document, not the unsigned payload, is the on-chain subject.
-        document = replace(
-            document,
-            valid_until=(
-                document.issuance_date
-                + timedelta(days=DjangoCredentialRepository.DEFAULT_VALIDITY_DAYS)
-            ),
-        )
-        document = self._sign_document(
-            document=document,
-            issuer_identity=context.group_did,
-        )
-
-        credential_hash = self.hash_service.calculate(
-            document
-        )
-
-        if self.anchor_service is None:
-            self.anchor_service = AnchorService()
-
-        receipt = self.anchor_service.anchor(
-            credential_hash=credential_hash,
-        )
-
-        persisted = self._persist_issuance(
-            document=document,
-            credential_hash=credential_hash,
-            receipt=receipt,
-            context=context,
-            issued_by_id=issued_by_id,
-            period_start=period_start,
-            period_end=period_end,
-        )
-
-        return persisted.credential
+        # Phase 3: receipt and active state committed in one SQL transaction.
+        self._complete_issuance(credential=prepared, receipt=receipt)
+        return prepared
 
     def _load_context(
         self,
@@ -162,6 +139,7 @@ class IssueCredentialService:
                 "group",
                 "user",
             )
+            .select_for_update()
             .get(id=group_member_id)
         )
 
@@ -247,11 +225,10 @@ class IssueCredentialService:
                 ),
                 period_start=period_start,
                 period_end=period_end,
-                status=(
-                    VerifiableCredential
-                    .Status
-                    .ACTIVE
-                ),
+                status__in=[
+                    VerifiableCredential.Status.ACTIVE,
+                    VerifiableCredential.Status.PENDING,
+                ],
             )
             .exists()
         )
@@ -302,34 +279,16 @@ class IssueCredentialService:
             raise CredentialSignatureFailed()
         return replace(document, proof=proof)
 
-    def _persist_issuance(
+    @transaction.atomic
+    def _complete_issuance(
         self,
         *,
-        document: CredentialDocument,
-        credential_hash: CredentialHash,
+        credential: VerifiableCredential,
         receipt: BlockchainReceipt,
-        context: CredentialIssuanceContext,
-        issued_by_id: UUID,
-        period_start: date,
-        period_end: date,
-    ) -> PersistedCredentialIssuance:
-        credential = self.credential_repository.save(
-            document=document,
-            credential_hash=credential_hash,
-            context=context,
-            issued_by_id=issued_by_id,
-            period_start=period_start,
-            period_end=period_end,
+    ) -> VerifiableCredential:
+        self.blockchain_anchor_repository.save(
+            credential=credential, receipt=receipt
         )
-
-        blockchain_anchor = (
-            self.blockchain_anchor_repository.save(
-                credential=credential,
-                receipt=receipt,
-            )
-        )
-
-        return PersistedCredentialIssuance(
-            credential=credential,
-            blockchain_anchor=blockchain_anchor,
-        )
+        credential.status = VerifiableCredential.Status.ACTIVE
+        credential.save(update_fields=["status"])
+        return credential

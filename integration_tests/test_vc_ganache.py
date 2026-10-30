@@ -11,6 +11,7 @@ from copy import deepcopy
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from django.conf import settings
@@ -168,6 +169,91 @@ def test_signed_vc_emission_verification_revocation_on_ganache():
     )
     assert after_revoke.status_code == 200
     assert after_revoke.data["data"]["valid"] is False
+
+    # Fault injection: the transaction on chain succeeds, but the SQL
+    # persistence step fails. Reproduce and quantify the existing gap.
+    second_holder = User.objects.create_user(
+        phone_number="+258841000003", password="test-strong-password"
+    )
+    second_membership = GroupMember.objects.create(
+        group=group, user=second_holder,
+        role=GroupMember.Role.MEMBER, status=GroupMember.Status.ACTIVE,
+    )
+    DIDService.create_for_user(user=second_holder)
+    Contribution.objects.create(
+        member=second_membership, group_settings=group_settings,
+        amount=Decimal("1000.00"), currency="MZN",
+        status=Contribution.Status.CONFIRMED,
+        source=Contribution.Source.MANUAL,
+        reference="AUDIT-CONTRIB-002", contribution_period=date(2026, 9, 1),
+    )
+
+    # PostgreSQL finalize fails *after* the contract accepts the signed hash.
+    # The durable PENDING intent must survive to make reconciliation possible.
+    client.force_authenticate(user=manager)
+    client.raise_request_exception = False
+    with patch(
+        "credentials.infrastructure.repositories."
+        "django_blockchain_anchor_repository.BlockchainAnchor.objects.create",
+        side_effect=RuntimeError("INJECTED: DB finalize failed after anchoring"),
+    ):
+        failed_issue = client.post(
+            f"/api/v1/credentials/{group.id}/credentials/",
+            {
+                "group_member_id": str(second_membership.id),
+                "period_start": "2026-09-01",
+                "period_end": "2026-09-30",
+            },
+            format="json",
+        )
+    client.raise_request_exception = True
+
+    assert failed_issue.status_code == 500
+    pending = VerifiableCredential.objects.get(group_member=second_membership)
+    assert pending.status == VerifiableCredential.Status.PENDING
+    on_chain = contract.functions.credentialExists(
+        bytes.fromhex(pending.credential_hash)
+    ).call()
+    assert on_chain is True
+    assert pending.anchors.count() == 0
+
+    # Resume from the exact signed document and the existing on-chain event.
+    # No new blockchain transaction should be sent.
+    from credentials.application.services.reconcile_credential_issuance_service import (
+        ReconcileCredentialIssuanceService,
+    )
+
+    events_before = contract.events.CredentialAnchored().get_logs(
+        from_block=0,
+        to_block="latest",
+        argument_filters={"credentialHash": bytes.fromhex(pending.credential_hash)},
+    )
+    assert len(events_before) == 1
+
+    recovered = ReconcileCredentialIssuanceService().reconcile(
+        credential_id=pending.id
+    )
+    recovered.refresh_from_db()
+    assert recovered.status == VerifiableCredential.Status.ACTIVE
+    assert recovered.anchors.count() == 1
+    assert recovered.anchors.first().transaction_hash == events_before[0]["transactionHash"].hex()
+
+    events_after = contract.events.CredentialAnchored().get_logs(
+        from_block=0,
+        to_block="latest",
+        argument_filters={"credentialHash": bytes.fromhex(pending.credential_hash)},
+    )
+    assert len(events_after) == 1
+    assert (
+        ReconcileCredentialIssuanceService().reconcile(credential_id=pending.id).id
+        == pending.id
+    )
+    assert recovered.anchors.count() == 1
+    print(
+        f"CONSISTENCY_RECOVERY hash={pending.credential_hash}"
+        " chain_confirmed=True intent_durable=True reconciled=True"
+        " duplicate_anchoring=False"
+    )
 
     # Evidence summary is intentionally test-only; never log private keys/PII.
     print(

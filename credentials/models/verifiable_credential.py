@@ -11,6 +11,7 @@ class VerifiableCredential(BaseModel):
         )
 
     class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending blockchain confirmation"
         ACTIVE = "ACTIVE", "Active"
         REVOKED = "REVOKED", "Revoked"
 
@@ -111,8 +112,8 @@ class VerifiableCredential(BaseModel):
                     "period_start",
                     "period_end",
                 ],
-                condition=models.Q(status="ACTIVE"),
-                name="unique_active_vc_member_period",
+                condition=models.Q(status__in=["ACTIVE", "PENDING"]),
+                name="unique_issuable_vc_member_period",
             ),
         ]
 
@@ -138,6 +139,9 @@ class VerifiableCredential(BaseModel):
 
     @property
     def effective_status(self) -> str:
+        if self.status == self.Status.PENDING:
+            return "PENDING"
+
         if self.status == self.Status.REVOKED:
             return "REVOKED"
 

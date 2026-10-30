@@ -18,6 +18,7 @@ from blockchain.exceptions import (
     CredentialAlreadyAnchored,
     CredentialAlreadyRevoked,
 )
+from blockchain.mappers.blockchain_receipt_mapper import BlockchainReceiptMapper
 from blockchain.services.transaction_service import (
     TransactionService,
 )
@@ -198,3 +199,37 @@ class CredentialRegistryClient:
         return self.transaction_service.execute(
             function
         )
+
+    def recover_anchoring_receipt(self, credential_hash: str) -> BlockchainReceipt:
+        """Recover confirmed transaction metadata via the contract event log.
+
+        This demo searches from deployment genesis (block zero). A production
+        deployment must use a known deployment block/indexed event store.
+        """
+        state = self.get_credential(credential_hash)
+        if not state["exists"] or state["revoked"]:
+            raise ValueError("Cannot reconcile a missing or revoked anchor.")
+
+        events = self.contract.events.CredentialAnchored().get_logs(
+            from_block=0,
+            to_block="latest",
+            argument_filters={
+                "credentialHash": self._to_bytes32(credential_hash)
+            },
+        )
+        if len(events) != 1:
+            raise ValueError(
+                f"Expected one CredentialAnchored event, found {len(events)}."
+            )
+        event = events[0]
+        receipt = self.web3.eth.get_transaction_receipt(
+            event["transactionHash"]
+        )
+        result = BlockchainReceiptMapper.from_web3(
+            receipt,
+            wallet_address=state["anchored_by"],
+            contract_address=self.config.contract_address,
+        )
+        if not result.status:
+            raise ValueError("The recovered blockchain transaction failed.")
+        return result
