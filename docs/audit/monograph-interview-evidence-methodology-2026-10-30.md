@@ -67,6 +67,27 @@ Esta redacção é **segura como descrição dos registos**, mas não substitui 
 - **HE5**: diversidade de literacia e dispositivos informa requisitos de acessibilidade; **não valida** autonomia técnica/regulatória nem implantação P2P.
 - **HG**: a confiança interpessoal pode coexistir com provas tecnológicas; não está demonstrada substituição da intermediação bancária.
 
+
+## 7. Rastreabilidade preliminar: evidências das entrevistas → requisitos existentes
+
+A versão examinada inclui requisitos RF-014 a RF-031 nas páginas físicas 84–89. Esta matriz associa **necessidades mencionadas pelos participantes** a requisitos **já especificados**. A associação é analítica, não demonstra implementação nem prova que o requisito tenha sido originalmente derivado da entrevista.
+
+| Tema | Registos relevantes | Requisito identificado no Quadro 5.2 | Relação e ressalva |
+|---|---|---|---|
+| Ordem da rotação | E2, E3 | **RF-014** (definir ordem), **RF-015** (consultar ordem) | Necessidade de visibilidade e previsibilidade; não se demonstrou redução de conflitos |
+| Perda, fragilidade e acesso aos registos | E1, E2, E6, E7 | **RF-018** (manter histórico), **RF-019** (consultar histórico), **RF-029** (histórico auditável) | Historizar não equivale automaticamente a recuperar dados perdidos ou corrigir informação inicialmente falsa |
+| Comprovativos e contestação | E1, E3, E6 | **RF-020** (comprovativo), **RF-030** (verificar autenticidade) | Um recibo digital ajuda na rastreabilidade se confirmar uma operação verdadeira; não há verificação real da origem financeira |
+| Pagamentos e confirmações | E1, E2, E5 | **RF-017** (registar contribuição), **RF-027** (callback de carteira móvel *simulada*) | Utilização de M-Pesa pelos entrevistados não demonstra integração do protótipo com M-Pesa |
+| Notificações, lembretes e desembolsos | E1, E3, E4, E5 | **RF-024** (notificar registo), **RF-025** (lembretes), **RF-026** (notificar desembolso) | Necessidades declaradas; **verificar implementação** antes de reportar funcionalidade entregue |
+| Consulta de histórico de recebimentos | E2, E3, E7 | **RF-023** (consultar desembolsos), **RF-019** (consultar contribuições) | Os relatos sustentam relevância de acesso, não preferência populacional |
+| Usabilidade para diferentes perfis | E3, E4, E5 | **RNF-005** (usabilidade) | Não existe estudo de usabilidade que comprove cumprimento do RNF; SMS/USSD não são capacidades demonstradas |
+
+### Discrepância de proveniência
+No Quadro 5.2 da cópia analisada, **RF-022** regista explicitamente a fonte «Análise documental e entrevistas», enquanto, em diversos requisitos relacionados com necessidades efectivamente presentes nas respostas (p. ex., **RF-015, RF-018, RF-019, RF-020, RF-024 e RF-025**), a ficha declara «Análise documental e caso de estudo». Esta divergência pode ser resolvida com **rastreabilidade adicional E1–E7**, mas não se deve alterar indiscriminadamente a fonte histórica do requisito sem comprovar o processo de especificação original.
+
+**Problema adicional:** o objectivo específico 1.2.2 refere zonas **urbanas e periurbanas**, mas as fichas E1–E7, conforme apresentadas, não documentam as localidades de recolha. Os relatos não permitem sustentar uma comparação geográfica ou a cobertura desse âmbito; conservar a limitação.
+
+
 ## 6. Critérios de aceitação antes de alterar o manuscrito
 - [ ] Confirmar que o anexo final continua a apresentar E1–E7 (o material foi preservado no histórico, mas DOCX canónico indisponível para edição nesta sessão).
 - [ ] Recuperar informações reais de amostragem, número de grupos, local, período de recolha, consentimento e registo de entrevistas, ou declarar explicitamente o que não está documentado.
