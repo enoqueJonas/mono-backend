@@ -86,3 +86,36 @@ Os critérios de reporte COREQ (Tong, Sainsbury & Craig, 2007) e SRQR (O'Brien e
 
 ## 9. Resultado e integridade
 **Esta revisão NÃO altera a monografia**. O ficheiro original canónico foi legível pela ferramenta documental (incluindo páginas/imagens), mas não pôde ser materializado em bytes para uma edição segura. Os parágrafos acima são um **patch editorial auditável**, não uma falsa prova de trabalho de campo, consentimento, impacto social ou validação estatística.
+
+
+## 10. Revisão crítica de proveniência e cronologia — 30/10/2026
+
+**Nova verificação:** a proposta de 3 páginas foi reavaliada para impedir duas inferências que excedem os registos: (i) que requisitos técnicos foram **originalmente levantados** nas entrevistas, quando apenas se demonstrou **compatibilidade temática**; (ii) que os seis eixos de análise foram estabelecidos quando as entrevistas ocorreram, quando esta **sistematização foi realizada durante a auditoria de Outubro de 2026**. Foi preparada uma nova proposta Word, de 4 páginas, para revisão editorial: `Proposta_Integracao_Entrevistas_Revisao_Critica_30102026.docx` (gerada no ChatGPT; não depositada em GitHub; **não** substitui a canónica).
+
+### Substituir afirmação sobre origem dos requisitos
+
+**Evitar:** «Os requisitos funcionais RF-018, RF-019, RF-020 e RF-024 foram extraídos das entrevistas E1–E7.»
+
+**Usar:** «Na revisão analítica dos registos de entrevistas anexados, foram identificadas necessidades compatíveis com os requisitos RF-018, RF-019, RF-020 e RF-024, previamente especificados. Esta correspondência temática não determina qual foi a fonte original de cada requisito, nem demonstra a implementação ou a eficácia operacional das funcionalidades.»
+
+A documentação existente (secção 5.2, fichas de requisitos) refere maioritariamente «Análise documental e caso de estudo»; **RF-022** menciona entrevistas. **Não actualizar retroactivamente** os campos de proveniência sem registos datados do processo de levantamento.
+
+### Substituir afirmação sobre execução da análise temática
+
+**Evitar:** «As entrevistas foram codificadas em seis temas aquando da recolha», se não houver notas originais que o sustentem.
+
+**Usar:** «Nesta revisão, os sete registos resumidos constantes dos Anexos foram organizados descritivamente em seis eixos: fragilidade dos registos; confirmação de pagamentos e comprovativos; visibilidade da ordem de rotação; acesso e familiaridade digital; necessidades de consulta e notificações; e confiança interpessoal. Cada eixo foi relacionado com os códigos E1–E7 e, de forma analítica, com requisitos já descritos na monografia.»
+
+**Procedimento de campo ainda por demonstrar:** quando e onde ocorreram entrevistas, como participantes foram seleccionados, número de grupos, consentimento para divulgação e existência de notas/registos primários. Não afirmar saturação, representatividade, amostra de grupos urbanos/periurbanos, nem veracidade independente do material sem suporte documental.
+
+### Reavaliação do capítulo «CASO DE ESTUDO»
+A nomenclatura **não deve ser resolvida por estética**. Referências metodológicas sobre estudos de caso exigem a definição de uma unidade real e de limites contextuais. O capítulo 4 canónico (páginas físicas 71–75) descreve predominantemente dados secundários nacionais e perfis conceptuais; sem um caso delimitado verificável, a proposta «Caracterização do contexto de aplicação» é mais precisa. Se o autor confirmar **um caso real delimitado**, conservar «estudo de caso» e documentar as fronteiras efectivas da investigação. Referências metodológicas, não norma USTM:
+- Tong, Sainsbury & Craig (2007), COREQ: https://pubmed.ncbi.nlm.nih.gov/17872937/
+- O'Brien et al. (2014), SRQR: https://pubmed.ncbi.nlm.nih.gov/24979285/
+- Greenhalgh (2025), *Case studies: a guide for researchers, educators, and implementers*: https://bmjmedicine.bmj.com/content/4/1/e001623
+
+### QA do artefacto de proposta
+- 4 páginas renderizadas em PDF/PNG e inspeccionadas visualmente.
+- 6 secções numeradas em sequência; matriz com 6 temas e linhas de cabeçalho; 6 pontos de lacunas/documentação.
+- Sem alteração de hipóteses, sem inquéritos inventados e sem percentagens derivadas dos sete registos.
+- **Importante:** a monografia canónica **não** foi editada e continua a exigir o DOCX original em bytes para uma integração com controlo de alterações.
