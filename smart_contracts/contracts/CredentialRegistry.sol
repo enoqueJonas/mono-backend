@@ -10,6 +10,19 @@ contract CredentialRegistry {
         address anchoredBy;
     }
 
+    // A single test-network backend operator submits anchor/revocation transactions.
+    // This is a defensive authorization boundary, not distributed governance.
+    address public immutable operator;
+
+    constructor() {
+        operator = msg.sender;
+    }
+
+    modifier onlyOperator() {
+        require(msg.sender == operator, "Only authorized operator");
+        _;
+    }
+
     mapping(bytes32 => CredentialAnchor) private anchors;
 
     event CredentialAnchored(
@@ -26,7 +39,7 @@ contract CredentialRegistry {
     error CredentialNotFound();
     error CredentialAlreadyRevoked();
 
-    function registerCredentialHash(bytes32 credentialHash) external {
+    function registerCredentialHash(bytes32 credentialHash) external onlyOperator {
         if (anchors[credentialHash].exists) {
             revert CredentialAlreadyAnchored();
         }
@@ -41,7 +54,7 @@ contract CredentialRegistry {
         emit CredentialAnchored(credentialHash, msg.sender);
     }
 
-    function revokeCredential(bytes32 credentialHash) external {
+    function revokeCredential(bytes32 credentialHash) external onlyOperator {
         CredentialAnchor storage anchor = anchors[credentialHash];
 
         if (!anchor.exists) {
