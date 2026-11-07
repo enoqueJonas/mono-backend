@@ -182,3 +182,14 @@ def test_rejects_zero_settings_hash(registry):
                 "from": accounts[0],
             },
         )
+
+
+def test_non_operator_cannot_anchor_group_settings(registry):
+    with reverts("Only authorized operator"):
+        registry.registerGroupSettings(
+            b"\\x01" * 32,
+            1,
+            b"\\x02" * 32,
+            {"from": accounts[1]},
+        )
+    assert registry.groupSettingsExists(b"\\x01" * 32, 1) is False
