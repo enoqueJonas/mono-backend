@@ -19,6 +19,7 @@ from disbursements.services.disbursement_service import (
     IncompleteContributions,
     InvalidDisbursementStatus,
     NoConfirmedContributions,
+    IneligibleApprover,
 )
 from groups.models import (
     Group,
@@ -47,6 +48,14 @@ class DisbursementServiceTests(TestCase):
             password="testpass123",
         )
 
+
+        self.voter1_user = User.objects.create_user(
+            phone_number="+258846121212", password="testpass123",
+        )
+        self.voter2_user = User.objects.create_user(
+            phone_number="+258846343434", password="testpass123",
+        )
+
         self.group = Group.objects.create(
             name="Grupo Teste",
         )
@@ -59,7 +68,7 @@ class DisbursementServiceTests(TestCase):
             contribution_frequency=(
                 GroupSettings.ContributionFrequency.MONTHLY
             ),
-            maximum_members=2,
+            maximum_members=4,
             rotation_strategy=(
                 GroupSettings.RotationStrategy.FIXED_ORDER
             ),
@@ -80,6 +89,16 @@ class DisbursementServiceTests(TestCase):
             user=self.member_user,
             role=GroupMember.Role.MEMBER,
             status=GroupMember.Status.ACTIVE,
+        )
+
+
+        self.voter1 = GroupMember.objects.create(
+            group=self.group, user=self.voter1_user,
+            role=GroupMember.Role.MEMBER, status=GroupMember.Status.ACTIVE,
+        )
+        self.voter2 = GroupMember.objects.create(
+            group=self.group, user=self.voter2_user,
+            role=GroupMember.Role.MEMBER, status=GroupMember.Status.ACTIVE,
         )
 
         self.period = date(2026, 9, 1)
@@ -108,6 +127,7 @@ class DisbursementServiceTests(TestCase):
             DisbursementService.create(
                 group_id=self.group.id,
                 cycle_number=1,
+            created_by=self.manager_user,
             )
 
         self.assertFalse(
@@ -134,6 +154,7 @@ class DisbursementServiceTests(TestCase):
         disbursement = DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
         self.assertEqual(
@@ -168,6 +189,18 @@ class DisbursementServiceTests(TestCase):
             contribution_period=self.period,
             reference="MAN-002",
         )
+        for n, membership in enumerate((self.voter1, self.voter2), start=3):
+            Contribution.objects.create(
+                member=membership,
+                group_settings=self.settings,
+                amount=Decimal("1000.00"),
+                currency="MZN",
+                source=Contribution.Source.MANUAL,
+                status=Contribution.Status.CONFIRMED,
+                contribution_period=self.period,
+                reference=f"MAN-{n:03}",
+            )
+
 
     def test_create_disbursement(self):
         self.create_confirmed_contributions()
@@ -175,6 +208,7 @@ class DisbursementServiceTests(TestCase):
         disbursement = DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
         self.assertEqual(
@@ -195,7 +229,7 @@ class DisbursementServiceTests(TestCase):
         )
         self.assertEqual(
             disbursement.amount,
-            Decimal("2000.00"),
+            Decimal("4000.00"),
         )
         self.assertEqual(
             disbursement.currency,
@@ -217,7 +251,7 @@ class DisbursementServiceTests(TestCase):
             contribution_frequency=(
                 GroupSettings.ContributionFrequency.MONTHLY
             ),
-            maximum_members=2,
+            maximum_members=4,
             rotation_strategy=(
                 GroupSettings.RotationStrategy.FIXED_ORDER
             ),
@@ -229,6 +263,7 @@ class DisbursementServiceTests(TestCase):
         disbursement = DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
         self.assertEqual(
@@ -237,7 +272,7 @@ class DisbursementServiceTests(TestCase):
         )
         self.assertEqual(
             disbursement.amount,
-            Decimal("2000.00"),
+            Decimal("4000.00"),
         )
         self.assertEqual(
             disbursement.status,
@@ -264,6 +299,7 @@ class DisbursementServiceTests(TestCase):
             DisbursementService.create(
                 group_id=self.group.id,
                 cycle_number=1,
+            created_by=self.manager_user,
             )
 
     def test_rejects_when_no_confirmed_contributions_exist(self):
@@ -273,6 +309,7 @@ class DisbursementServiceTests(TestCase):
             DisbursementService.create(
                 group_id=self.group.id,
                 cycle_number=1,
+            created_by=self.manager_user,
             )
 
     def test_rejects_duplicate_disbursement_for_same_rotation(
@@ -283,6 +320,7 @@ class DisbursementServiceTests(TestCase):
         DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
         with self.assertRaises(
@@ -291,6 +329,7 @@ class DisbursementServiceTests(TestCase):
             DisbursementService.create(
                 group_id=self.group.id,
                 cycle_number=1,
+            created_by=self.manager_user,
             )
 
     def test_rejects_inactive_beneficiary(self):
@@ -310,6 +349,7 @@ class DisbursementServiceTests(TestCase):
             DisbursementService.create(
                 group_id=self.group.id,
                 cycle_number=1,
+            created_by=self.manager_user,
             )
 
     def test_rejects_archived_group(self):
@@ -327,6 +367,7 @@ class DisbursementServiceTests(TestCase):
             DisbursementService.create(
                 group_id=self.group.id,
                 cycle_number=1,
+            created_by=self.manager_user,
             )
 
     def test_requires_consensus_when_group_settings_require_it(
@@ -345,6 +386,7 @@ class DisbursementServiceTests(TestCase):
         disbursement = DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
         self.assertEqual(
@@ -366,6 +408,7 @@ class DisbursementServiceTests(TestCase):
         disbursement = DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
         self.assertEqual(
@@ -391,6 +434,7 @@ class DisbursementServiceTests(TestCase):
         disbursement = DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
         self.assertEqual(
@@ -422,6 +466,7 @@ class DisbursementServiceTests(TestCase):
         disbursement = DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
         with self.assertRaises(
@@ -447,6 +492,7 @@ class DisbursementServiceTests(TestCase):
         disbursement = DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
         completed = DisbursementService.complete(
@@ -486,6 +532,7 @@ class DisbursementServiceTests(TestCase):
         disbursement = DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
         DisbursementService.complete(
@@ -522,6 +569,7 @@ class DisbursementServiceTests(TestCase):
         disbursement = DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
         with self.assertRaises(
@@ -540,6 +588,7 @@ class DisbursementServiceTests(TestCase):
         disbursement = DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
         with self.assertRaises(
@@ -569,6 +618,14 @@ class DisbursementAPITests(APITestCase):
             password="testpass123",
         )
 
+
+        self.voter1_user = User.objects.create_user(
+            phone_number="+258846565656", password="testpass123",
+        )
+        self.voter2_user = User.objects.create_user(
+            phone_number="+258846787878", password="testpass123",
+        )
+
         self.group = Group.objects.create(
             name="Grupo API",
         )
@@ -581,7 +638,7 @@ class DisbursementAPITests(APITestCase):
             contribution_frequency=(
                 GroupSettings.ContributionFrequency.MONTHLY
             ),
-            maximum_members=2,
+            maximum_members=4,
             rotation_strategy=(
                 GroupSettings.RotationStrategy.FIXED_ORDER
             ),
@@ -602,6 +659,16 @@ class DisbursementAPITests(APITestCase):
             user=self.member_user,
             role=GroupMember.Role.MEMBER,
             status=GroupMember.Status.ACTIVE,
+        )
+
+
+        self.voter1 = GroupMember.objects.create(
+            group=self.group, user=self.voter1_user,
+            role=GroupMember.Role.MEMBER, status=GroupMember.Status.ACTIVE,
+        )
+        self.voter2 = GroupMember.objects.create(
+            group=self.group, user=self.voter2_user,
+            role=GroupMember.Role.MEMBER, status=GroupMember.Status.ACTIVE,
         )
 
         self.period = date(2026, 9, 1)
@@ -637,6 +704,18 @@ class DisbursementAPITests(APITestCase):
             contribution_period=self.period,
             reference="API-MAN-002",
         )
+        for n, membership in enumerate((self.voter1, self.voter2), start=3):
+            Contribution.objects.create(
+                member=membership,
+                group_settings=self.settings,
+                amount=Decimal("1000.00"),
+                currency="MZN",
+                source=Contribution.Source.MANUAL,
+                status=Contribution.Status.CONFIRMED,
+                contribution_period=self.period,
+                reference=f"API-MAN-{n:03}",
+            )
+
 
         self.list_url = reverse(
             "group-disbursement-list-create",
@@ -661,6 +740,7 @@ class DisbursementAPITests(APITestCase):
         DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
         self.client.force_authenticate(
@@ -690,7 +770,7 @@ class DisbursementAPITests(APITestCase):
             Decimal(
                 response.data["data"][0]["amount"]
             ),
-            Decimal("2000.00"),
+            Decimal("4000.00"),
         )
 
     def test_non_member_cannot_list_group_disbursements(
@@ -746,7 +826,7 @@ class DisbursementAPITests(APITestCase):
 
         self.assertEqual(
             disbursement.amount,
-            Decimal("2000.00"),
+            Decimal("4000.00"),
         )
 
         self.assertEqual(
@@ -827,6 +907,7 @@ class DisbursementAPITests(APITestCase):
         disbursement = DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
         detail_url = reverse(
@@ -877,6 +958,7 @@ class DisbursementAPITests(APITestCase):
         disbursement = DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
         approve_url = reverse(
@@ -926,6 +1008,7 @@ class DisbursementAPITests(APITestCase):
         disbursement = DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
         approve_url = reverse(
@@ -964,6 +1047,7 @@ class DisbursementAPITests(APITestCase):
         disbursement = DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
         approve_url = reverse(
