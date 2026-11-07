@@ -1,7 +1,6 @@
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Sum
 from django.utils import timezone
 
 from contributions.models import Contribution
@@ -100,6 +99,72 @@ class DisbursementService:
         ).count()
 
     @staticmethod
+    def _verified_contribution_total(
+        *,
+        group,
+        settings,
+        period,
+        frozen_contributor_user_ids=None,
+        proposed_total=None,
+    ) -> Decimal:
+        """Fail closed if the confirmed ledger and active participant set diverge.
+
+        This is an interim control, NOT a policy deciding how a departed
+        participant's money should be distributed. It intentionally blocks
+        ambiguous ledgers rather than silently excluding or paying that money.
+        Cycle-start membership snapshots require a separate domain decision.
+        """
+        active_members = list(
+            GroupMember.objects.select_for_update().filter(
+                group=group,
+                status=GroupMember.Status.ACTIVE,
+            ).values_list("id", "user_id")
+        )
+        active_membership_ids = {str(member_id) for member_id, _ in active_members}
+        active_user_ids = {str(user_id) for _, user_id in active_members}
+
+        # The proposal's voter snapshot plus proposer + beneficiary is the
+        # frozen ACTIVE set at proposal time. A group membership change during
+        # voting must be reconciled, not silently alter financial expectations.
+        if (
+            frozen_contributor_user_ids is not None
+            and active_user_ids != set(frozen_contributor_user_ids)
+        ):
+            raise IncompleteContributions()
+
+        records = list(
+            Contribution.objects.select_for_update().filter(
+                member__group=group,
+                group_settings=settings,
+                contribution_period=period,
+            ).values_list("member_id", "status", "amount", "currency")
+        )
+        confirmed = [
+            (str(member_id), amount, currency)
+            for member_id, status, amount, currency in records
+            if status == Contribution.Status.CONFIRMED
+        ]
+        if not confirmed:
+            raise NoConfirmedContributions()
+
+        confirmed_membership_ids = {member_id for member_id, _, _ in confirmed}
+        if (
+            confirmed_membership_ids != active_membership_ids
+            or len(confirmed) != len(active_membership_ids)
+            or any(
+                Decimal(amount) != Decimal(settings.contribution_amount)
+                or currency != settings.currency
+                for _, amount, currency in confirmed
+            )
+        ):
+            raise IncompleteContributions()
+
+        total = sum((amount for _, amount, _ in confirmed), Decimal("0.00"))
+        if proposed_total is not None and total != Decimal(proposed_total):
+            raise IncompleteContributions()
+        return total
+
+    @staticmethod
     @transaction.atomic
     def create(*, group_id, cycle_number: int, created_by) -> Disbursement:
         # Authorize at the service boundary, not only in the API view.
@@ -121,20 +186,11 @@ class DisbursementService:
             raise DisbursementAlreadyExists()
 
         settings = current_rotation.group_settings
-        active_members_count = GroupMember.objects.filter(
-            group=group, status=GroupMember.Status.ACTIVE
-        ).count()
-        contributions = Contribution.objects.filter(
-            member__group=group,
-            status=Contribution.Status.CONFIRMED,
-            group_settings=settings,
-            contribution_period=current_rotation.contribution_period,
+        total = DisbursementService._verified_contribution_total(
+            group=group,
+            settings=settings,
+            period=current_rotation.contribution_period,
         )
-        confirmed_count = contributions.count()
-        if confirmed_count == 0:
-            raise NoConfirmedContributions()
-        if confirmed_count < active_members_count:
-            raise IncompleteContributions()
 
         eligible_user_ids = [
             str(uid)
@@ -152,10 +208,6 @@ class DisbursementService:
 
         # Strict majority of non-proposer, non-beneficiary active members.
         quorum = max(2, len(eligible_user_ids) // 2 + 1)
-        total = contributions.aggregate(total=Sum("amount")).get("total")
-        if total is None:
-            total = Decimal("0.00")
-
         # Deliberately ignore legacy requires_consensus=False; no bypass.
         return Disbursement.objects.create(
             group=group,
@@ -249,6 +301,22 @@ class DisbursementService:
             < disbursement.required_approvals
         ):
             raise InsufficientDisbursementApprovals()
+
+        # A vote authorizes a specific financial snapshot, not any later
+        # ledger state. Revalidate member identities, period, amount, currency,
+        # and total before the administrative rotation advances.
+        if not disbursement.proposed_by_id or not disbursement.eligible_approver_ids:
+            raise IncompleteContributions()
+        frozen_contributors = set(disbursement.eligible_approver_ids)
+        frozen_contributors.add(str(disbursement.proposed_by_id))
+        frozen_contributors.add(str(disbursement.beneficiary.user_id))
+        DisbursementService._verified_contribution_total(
+            group=disbursement.group,
+            settings=disbursement.group_settings,
+            period=disbursement.rotation_order.contribution_period,
+            frozen_contributor_user_ids=frozen_contributors,
+            proposed_total=disbursement.amount,
+        )
 
         # Administrative record only: does not transfer or settle external funds.
         disbursement.status = Disbursement.Status.COMPLETED
