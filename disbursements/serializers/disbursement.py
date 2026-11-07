@@ -26,6 +26,11 @@ class DisbursementSerializer(serializers.ModelSerializer):
         read_only=True,
     )
 
+    approval_count = serializers.SerializerMethodField()
+
+    def get_approval_count(self, obj):
+        return obj.approvals.count()
+
     class Meta:
         model = Disbursement
         fields = (
@@ -44,6 +49,9 @@ class DisbursementSerializer(serializers.ModelSerializer):
             "currency",
             "status",
             "requested_at",
+            "proposed_by",
+            "required_approvals",
+            "approval_count",
             "completed_at",
             "failure_reason",
             "created_at",
