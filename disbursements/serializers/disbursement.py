@@ -27,9 +27,13 @@ class DisbursementSerializer(serializers.ModelSerializer):
     )
 
     approval_count = serializers.SerializerMethodField()
+    approved_by_ids = serializers.SerializerMethodField()
 
     def get_approval_count(self, obj):
         return obj.approvals.count()
+
+    def get_approved_by_ids(self, obj):
+        return [str(value) for value in obj.approvals.values_list("approved_by_id", flat=True)]
 
     class Meta:
         model = Disbursement
@@ -52,6 +56,8 @@ class DisbursementSerializer(serializers.ModelSerializer):
             "proposed_by",
             "required_approvals",
             "approval_count",
+            "approved_by_ids",
+            "eligible_approver_ids",
             "completed_at",
             "failure_reason",
             "created_at",
