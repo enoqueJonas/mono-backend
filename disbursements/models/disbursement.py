@@ -64,6 +64,17 @@ class Disbursement(models.Model):
         default=Status.PENDING,
     )
 
+    # Captured at proposal time: prevents adding voters after a proposal.
+    proposed_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.PROTECT,
+        related_name="proposed_disbursements",
+        null=True,
+        blank=True,  # Existing records remain untrusted until migrated.
+    )
+    required_approvals = models.PositiveIntegerField(default=2)
+    eligible_approver_ids = models.JSONField(default=list)
+
     requested_at = models.DateTimeField(
         auto_now_add=True,
     )
