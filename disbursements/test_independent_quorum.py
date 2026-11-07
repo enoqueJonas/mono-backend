@@ -14,6 +14,7 @@ from disbursements.services.disbursement_service import (
     IneligibleApprover,
     InsufficientDisbursementApprovals,
     InsufficientEligibleApprovers,
+    IncompleteContributions,
 )
 from groups.models import Group, GroupMember, GroupSettings, RotationOrder
 from groups.serializers.create_group import CreateGroupSettingsSerializer
@@ -287,3 +288,81 @@ class IndependentDisbursementApprovalTests(TestCase):
         )
         self.rotation.refresh_from_db()
         self.assertEqual(self.rotation.status, RotationOrder.Status.COMPLETED)
+
+    def test_ex_member_contribution_cannot_mask_missing_active_payer(self):
+        """Four confirmations must belong to four currently active payers."""
+        former = GroupMember.objects.create(
+            group=self.group, user=self.outsider,
+            status=GroupMember.Status.LEFT, role=GroupMember.Role.MEMBER,
+        )
+        Contribution.objects.create(
+            member=former, group_settings=self.settings,
+            amount=Decimal("1000.00"), currency="MZN",
+            contribution_period=self.period,
+            status=Contribution.Status.CONFIRMED,
+            reference="RN06-EX-001",
+        )
+        missing = Contribution.objects.get(member=self.members[self.voter2.pk])
+        missing.status = Contribution.Status.PENDING
+        missing.save(update_fields=["status", "updated_at"])
+
+        # Previous code counted 4 confirmed rows as 4 active members.
+        with self.assertRaises(IncompleteContributions):
+            self.propose()
+        self.assertFalse(Disbursement.objects.filter(group=self.group).exists())
+
+    def test_unresolved_ex_member_funds_block_proposal_instead_of_inflating_total(self):
+        """Do not silently disburse a departed member's confirmed money."""
+        former = GroupMember.objects.create(
+            group=self.group, user=self.outsider,
+            status=GroupMember.Status.LEFT, role=GroupMember.Role.MEMBER,
+        )
+        Contribution.objects.create(
+            member=former, group_settings=self.settings,
+            amount=Decimal("1000.00"), currency="MZN",
+            contribution_period=self.period,
+            status=Contribution.Status.CONFIRMED,
+            reference="RN06-EX-002",
+        )
+        with self.assertRaises(IncompleteContributions):
+            self.propose()
+
+    def test_reversal_after_votes_blocks_admin_completion(self):
+        """Quorum alone must not complete a now-unfunded cycle."""
+        disbursement = self.propose()
+        for voter in (self.voter1, self.voter2):
+            DisbursementService.approve(
+                disbursement_id=disbursement.id, approved_by=voter
+            )
+        reversed_payment = Contribution.objects.get(
+            member=self.members[self.voter1.pk]
+        )
+        reversed_payment.status = Contribution.Status.REVERSED
+        reversed_payment.save(update_fields=["status", "updated_at"])
+
+        with self.assertRaises(IncompleteContributions):
+            DisbursementService.complete(
+                disbursement_id=disbursement.id, completed_by=self.manager
+            )
+        disbursement.refresh_from_db()
+        self.rotation.refresh_from_db()
+        self.assertNotEqual(disbursement.status, Disbursement.Status.COMPLETED)
+        self.assertEqual(self.rotation.status, RotationOrder.Status.CURRENT)
+
+    def test_changed_contribution_value_after_votes_blocks_completion(self):
+        """Ledger amount at completion cannot diverge from proposed amount."""
+        disbursement = self.propose()
+        for voter in (self.voter1, self.voter2):
+            DisbursementService.approve(
+                disbursement_id=disbursement.id, approved_by=voter
+            )
+        payment = Contribution.objects.get(member=self.members[self.voter1.pk])
+        payment.amount = Decimal("1.00")
+        payment.save(update_fields=["amount", "updated_at"])
+
+        with self.assertRaises(IncompleteContributions):
+            DisbursementService.complete(
+                disbursement_id=disbursement.id, completed_by=self.manager
+            )
+        self.rotation.refresh_from_db()
+        self.assertEqual(self.rotation.status, RotationOrder.Status.CURRENT)
