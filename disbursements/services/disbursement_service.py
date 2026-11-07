@@ -186,12 +186,6 @@ class DisbursementService:
             raise DisbursementAlreadyExists()
 
         settings = current_rotation.group_settings
-        total = DisbursementService._verified_contribution_total(
-            group=group,
-            settings=settings,
-            period=current_rotation.contribution_period,
-        )
-
         eligible_user_ids = [
             str(uid)
             for uid in GroupMember.objects.filter(
@@ -205,6 +199,12 @@ class DisbursementService:
         ]
         if len(eligible_user_ids) < 2:
             raise InsufficientEligibleApprovers()
+
+        total = DisbursementService._verified_contribution_total(
+            group=group,
+            settings=settings,
+            period=current_rotation.contribution_period,
+        )
 
         # Strict majority of non-proposer, non-beneficiary active members.
         quorum = max(2, len(eligible_user_ids) // 2 + 1)
