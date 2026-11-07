@@ -366,3 +366,59 @@ class IndependentDisbursementApprovalTests(TestCase):
             )
         self.rotation.refresh_from_db()
         self.assertEqual(self.rotation.status, RotationOrder.Status.CURRENT)
+
+    def test_member_added_after_votes_does_not_change_proposal_without_review(self):
+        """Even a fully paid late joiner cannot expand a frozen proposal."""
+        disbursement = self.propose()
+        for voter in (self.voter1, self.voter2):
+            DisbursementService.approve(
+                disbursement_id=disbursement.id, approved_by=voter
+            )
+        added = GroupMember.objects.create(
+            group=self.group, user=self.outsider,
+            status=GroupMember.Status.ACTIVE, role=GroupMember.Role.MEMBER,
+        )
+        Contribution.objects.create(
+            member=added, group_settings=self.settings,
+            amount=Decimal("1000.00"), currency="MZN",
+            contribution_period=self.period,
+            status=Contribution.Status.CONFIRMED,
+            reference="RN06-LATE-001",
+        )
+        with self.assertRaises(IncompleteContributions):
+            DisbursementService.complete(
+                disbursement_id=disbursement.id, completed_by=self.manager
+            )
+        self.rotation.refresh_from_db()
+        self.assertEqual(self.rotation.status, RotationOrder.Status.CURRENT)
+
+    def test_wrong_currency_cannot_count_as_cycle_funding(self):
+        payment = Contribution.objects.get(member=self.members[self.voter1.pk])
+        payment.currency = "USD"
+        payment.save(update_fields=["currency", "updated_at"])
+        with self.assertRaises(IncompleteContributions):
+            self.propose()
+
+    def test_ex_member_contribution_added_after_votes_blocks_completion(self):
+        disbursement = self.propose()
+        for voter in (self.voter1, self.voter2):
+            DisbursementService.approve(
+                disbursement_id=disbursement.id, approved_by=voter
+            )
+        former = GroupMember.objects.create(
+            group=self.group, user=self.outsider,
+            status=GroupMember.Status.LEFT, role=GroupMember.Role.MEMBER,
+        )
+        Contribution.objects.create(
+            member=former, group_settings=self.settings,
+            amount=Decimal("1000.00"), currency="MZN",
+            contribution_period=self.period,
+            status=Contribution.Status.CONFIRMED,
+            reference="RN06-EX-LATE-001",
+        )
+        with self.assertRaises(IncompleteContributions):
+            DisbursementService.complete(
+                disbursement_id=disbursement.id, completed_by=self.manager
+            )
+        self.rotation.refresh_from_db()
+        self.assertEqual(self.rotation.status, RotationOrder.Status.CURRENT)
