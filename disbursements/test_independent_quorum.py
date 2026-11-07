@@ -221,3 +221,69 @@ class IndependentDisbursementApprovalTests(TestCase):
             response.data["data"]["approval_count"],
             1,
         )
+
+
+    def test_api_demo_four_members_and_two_independent_votes(self):
+        """The exact multi-login RN06 scenario used in the defense rehearsal."""
+        client = APIClient()
+        create_url = reverse(
+            "group-disbursement-list-create",
+            kwargs={"group_id": self.group.id},
+        )
+        client.force_authenticate(user=self.manager)
+        created = client.post(
+            create_url, {"cycle_number": 1}, format="json"
+        )
+        self.assertEqual(created.status_code, 201)
+        disbursement_id = created.data["data"]["id"]
+        approve_url = reverse(
+            "group-disbursement-approve",
+            kwargs={
+                "group_id": self.group.id,
+                "disbursement_id": disbursement_id,
+            },
+        )
+        complete_url = reverse(
+            "group-disbursement-complete",
+            kwargs={
+                "group_id": self.group.id,
+                "disbursement_id": disbursement_id,
+            },
+        )
+        self.assertEqual(
+            created.data["data"]["status"],
+            Disbursement.Status.AWAITING_CONSENSUS,
+        )
+
+        # The proposing manager cannot vote or complete before quorum.
+        self.assertEqual(client.post(approve_url, format="json").status_code, 400)
+        self.assertEqual(client.post(complete_url, format="json").status_code, 400)
+
+        client.force_authenticate(user=self.voter1)
+        first = client.post(approve_url, format="json")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(
+            first.data["data"]["status"],
+            Disbursement.Status.AWAITING_CONSENSUS,
+        )
+        self.assertEqual(first.data["data"]["approval_count"], 1)
+        self.assertEqual(client.post(approve_url, format="json").status_code, 400)
+
+        client.force_authenticate(user=self.voter2)
+        second = client.post(approve_url, format="json")
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(
+            second.data["data"]["status"],
+            Disbursement.Status.APPROVED,
+        )
+        self.assertEqual(second.data["data"]["approval_count"], 2)
+
+        client.force_authenticate(user=self.manager)
+        finished = client.post(complete_url, format="json")
+        self.assertEqual(finished.status_code, 200)
+        self.assertEqual(
+            finished.data["data"]["status"],
+            Disbursement.Status.COMPLETED,
+        )
+        self.rotation.refresh_from_db()
+        self.assertEqual(self.rotation.status, RotationOrder.Status.COMPLETED)
