@@ -9,6 +9,19 @@ contract ContributionRegistry {
         bool exists;
     }
 
+    // Only the nominated backend operator may anchor contribution claims.
+    // This does not attest that a financial payment occurred.
+    address public immutable operator;
+
+    constructor() {
+        operator = msg.sender;
+    }
+
+    modifier onlyOperator() {
+        require(msg.sender == operator, "Only authorized operator");
+        _;
+    }
+
     mapping(bytes32 => ContributionAnchor) private anchors;
 
     event ContributionAnchored(
@@ -21,7 +34,7 @@ contract ContributionRegistry {
     function registerContribution(
         bytes32 contributionId,
         bytes32 contributionHash
-    ) external {
+    ) external onlyOperator {
         require(contributionId != bytes32(0), "Invalid contribution ID");
         require(contributionHash != bytes32(0), "Invalid contribution hash");
         require(!anchors[contributionId].exists, "Contribution already anchored");

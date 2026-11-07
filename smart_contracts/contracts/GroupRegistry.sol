@@ -10,6 +10,19 @@ contract GroupRegistry {
         bool exists;
     }
 
+    // Independent EVM transactions must come from the designated backend operator.
+    // This access guard is not group-level multi-party approval.
+    address public immutable operator;
+
+    constructor() {
+        operator = msg.sender;
+    }
+
+    modifier onlyOperator() {
+        require(msg.sender == operator, "Only authorized operator");
+        _;
+    }
+
     mapping(bytes32 => mapping(uint256 => GroupSettingsAnchor)) private anchors;
 
     event GroupSettingsAnchored(
@@ -24,7 +37,7 @@ contract GroupRegistry {
         bytes32 groupId,
         uint256 version,
         bytes32 settingsHash
-    ) external {
+    ) external onlyOperator {
         require(groupId != bytes32(0), "Invalid group ID");
 
         require(version > 0, "Invalid version");

@@ -118,3 +118,22 @@ def test_rejects_second_revocation(registry, owner, credential_hash):
     registry.revokeCredential(credential_hash, {"from": owner})
     with reverts():
         registry.revokeCredential(credential_hash, {"from": owner})
+
+
+def test_non_operator_cannot_anchor_credential(registry, credential_hash):
+    with reverts("Only authorized operator"):
+        registry.registerCredentialHash(
+            credential_hash,
+            {"from": accounts[1]},
+        )
+    assert registry.credentialExists(credential_hash) is False
+
+
+def test_non_operator_cannot_revoke_credential(registry, owner, credential_hash):
+    registry.registerCredentialHash(credential_hash, {"from": owner})
+    with reverts("Only authorized operator"):
+        registry.revokeCredential(
+            credential_hash,
+            {"from": accounts[1]},
+        )
+    assert registry.getCredential(credential_hash)[1] is False

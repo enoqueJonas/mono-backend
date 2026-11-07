@@ -48,3 +48,13 @@ def test_rejects_duplicate_contribution(registry, accounts):
             contribution_hash,
             {"from": accounts[0]},
         )
+
+
+def test_non_operator_cannot_anchor_contribution(registry, accounts):
+    with reverts("Only authorized operator"):
+        registry.registerContribution(
+            _bytes32(101),
+            _bytes32(202),
+            {"from": accounts[1]},
+        )
+    assert registry.contributionExists(_bytes32(101)) is False
