@@ -164,7 +164,7 @@ class DisbursementServiceTests(TestCase):
 
         self.assertEqual(
             disbursement.status,
-            Disbursement.Status.APPROVED,
+            Disbursement.Status.AWAITING_CONSENSUS,
         )
 
     def create_confirmed_contributions(self):
@@ -237,7 +237,7 @@ class DisbursementServiceTests(TestCase):
         )
         self.assertEqual(
             disbursement.status,
-            Disbursement.Status.APPROVED,
+            Disbursement.Status.AWAITING_CONSENSUS,
         )
 
     def test_disbursement_uses_exact_rotation_settings_version(self):
@@ -276,7 +276,7 @@ class DisbursementServiceTests(TestCase):
         )
         self.assertEqual(
             disbursement.status,
-            Disbursement.Status.APPROVED,
+            Disbursement.Status.AWAITING_CONSENSUS,
         )
 
     def test_requires_all_active_members_to_have_confirmed_contribution(
@@ -416,9 +416,14 @@ class DisbursementServiceTests(TestCase):
             Disbursement.Status.AWAITING_CONSENSUS,
         )
 
+        first = DisbursementService.approve(
+            disbursement_id=disbursement.id,
+            approved_by=self.voter1_user,
+        )
+        self.assertEqual(first.status, Disbursement.Status.AWAITING_CONSENSUS)
         approved = DisbursementService.approve(
             disbursement_id=disbursement.id,
-            approved_by=self.manager_user,
+            approved_by=self.voter2_user,
         )
 
         self.assertEqual(
@@ -437,9 +442,15 @@ class DisbursementServiceTests(TestCase):
             created_by=self.manager_user,
         )
 
+        DisbursementService.approve(
+            disbursement_id=disbursement.id, approved_by=self.voter1_user,
+        )
+        DisbursementService.approve(
+            disbursement_id=disbursement.id, approved_by=self.voter2_user,
+        )
+        disbursement.refresh_from_db()
         self.assertEqual(
-            disbursement.status,
-            Disbursement.Status.APPROVED,
+            disbursement.status, Disbursement.Status.APPROVED,
         )
 
         with self.assertRaises(
@@ -470,7 +481,7 @@ class DisbursementServiceTests(TestCase):
         )
 
         with self.assertRaises(
-            NotGroupManager
+            IneligibleApprover
         ):
             DisbursementService.approve(
                 disbursement_id=disbursement.id,
@@ -494,6 +505,11 @@ class DisbursementServiceTests(TestCase):
             cycle_number=1,
             created_by=self.manager_user,
         )
+
+        for voter in (self.voter1_user, self.voter2_user):
+            DisbursementService.approve(
+                disbursement_id=disbursement.id, approved_by=voter,
+            )
 
         completed = DisbursementService.complete(
             disbursement_id=disbursement.id,
@@ -534,6 +550,11 @@ class DisbursementServiceTests(TestCase):
             cycle_number=1,
             created_by=self.manager_user,
         )
+
+        for voter in (self.voter1_user, self.voter2_user):
+            DisbursementService.approve(
+                disbursement_id=disbursement.id, approved_by=voter,
+            )
 
         DisbursementService.complete(
             disbursement_id=disbursement.id,
@@ -831,7 +852,7 @@ class DisbursementAPITests(APITestCase):
 
         self.assertEqual(
             response.data["data"]["status"],
-            Disbursement.Status.APPROVED,
+            Disbursement.Status.AWAITING_CONSENSUS,
         )
 
     def test_regular_member_cannot_create_disbursement(
@@ -946,7 +967,7 @@ class DisbursementAPITests(APITestCase):
             "2026-09-01",
         )
 
-    def test_manager_can_approve_disbursement(self):
+    def test_members_can_approve_disbursement(self):
         self.settings.requires_consensus = True
         self.settings.save(
             update_fields=[
@@ -970,7 +991,7 @@ class DisbursementAPITests(APITestCase):
         )
 
         self.client.force_authenticate(
-            user=self.manager_user,
+            user=self.voter1_user,
         )
 
         response = self.client.post(
@@ -985,11 +1006,13 @@ class DisbursementAPITests(APITestCase):
         )
 
         disbursement.refresh_from_db()
+        self.assertEqual(disbursement.status, Disbursement.Status.AWAITING_CONSENSUS)
 
-        self.assertEqual(
-            disbursement.status,
-            Disbursement.Status.APPROVED,
-        )
+        self.client.force_authenticate(user=self.voter2_user)
+        response = self.client.post(approve_url, {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        disbursement.refresh_from_db()
+        self.assertEqual(disbursement.status, Disbursement.Status.APPROVED)
 
         self.assertEqual(
             response.data["data"]["status"],
@@ -1057,6 +1080,12 @@ class DisbursementAPITests(APITestCase):
                 "disbursement_id": disbursement.id,
             },
         )
+
+        for voter in (self.voter1_user, self.voter2_user):
+            DisbursementService.approve(
+                disbursement_id=disbursement.id,
+                approved_by=voter,
+            )
 
         self.client.force_authenticate(
             user=self.manager_user,
