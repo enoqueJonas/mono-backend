@@ -85,6 +85,17 @@ python -m pytest disbursements/test_independent_quorum.py -q
 python -m pytest -q
 ```
 
+Para o ensaio Ganache que utiliza o **Solidity actual do ramo**, os artefactos devem ser recompilados antes do pytest, ou o teste falhará intencionalmente ao detectar um ABI/bytecode desactualizado:
+
+```bash
+npm install --no-save --no-audit --no-fund solc@0.8.20 ganache@7.9.2
+node scripts/compile-contract-artifacts.mjs
+# Com PostgreSQL/Ganache de teste configurados como na CI:
+python -m pytest integration_tests/test_vc_ganache.py -q -s --ds=config.settings_integration
+```
+
+Na GitHub Actions, a compilação é executada automaticamente. A revisão E2E confirmada no SHA `1ab6bf922d06b60092842f979645cb67b4dfc42c` obteve 131/131 Django, 18/18 Brownie e 1/1 Ganache. O contrato CredentialRegistry recompilado rejeitou ancoragem e revogação por outra conta Ethereum, verificadas por recibos de transacções falhadas. **Esses resultados não equivalem ao deployment local nem à execução visual do frontend.**
+
 O teste `test_api_demo_four_members_and_two_independent_votes` executa o cenário completo com quatro identidades distintas: gestor propõe; tentativa do gestor aprovar é rejeitada; tentativa de concluir cedo é rejeitada; o membro A aprova e permanece pendente; voto repetido é rejeitado; o membro B aprova e alcança o quórum; finalmente, o gestor regista a conclusão e a rotação avança. Outros testes cobrem membro não elegível, entrada tardia e suspensão de votante.
 
 ### Roteiro para ensaio visual (5 minutos)
@@ -102,7 +113,7 @@ A sequência de interface só pode ser considerada **executada** depois de ensai
 
 ## Portões de aceitação
 
-- [ ] Confirmar que o ramo tem CI Django, Brownie e PostgreSQL/Ganache aprovada no mesmo SHA.
+- [x] Confirmar que o ramo tem CI Django, Brownie e PostgreSQL/Ganache aprovada no mesmo SHA (`1ab6bf9`, 7 de Novembro de 2026).
 - [ ] Executar demonstração manual UI/API com quatro contas, sem usar credenciais reais.
 - [ ] Confirmar compatibilidade entre PR #26 e PR #1 do frontend.
 - [ ] Rever separadamente PR #14, #22, #26 e as migrações, antes de integrar na branch principal.
