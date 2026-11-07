@@ -35,7 +35,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
-          npm install --no-save ganache@7.9.2
+          npm install --no-save --no-audit --no-fund ganache@7.9.2 solc@0.8.20
+      - name: Compile current Solidity contracts for Ganache E2E
+        run: node scripts/compile-contract-artifacts.mjs
       - name: Start ephemeral Ganache with funded test account
         run: |
           ./node_modules/.bin/ganache \
