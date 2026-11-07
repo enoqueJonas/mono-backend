@@ -66,6 +66,9 @@ class GroupService:
     @transaction.atomic
     def create_group(*, created_by, data: dict) -> Group:
         settings_data = data.pop("settings")
+        if settings_data.get("requires_consensus") is False:
+            raise DomainException("A aprovação colectiva não pode ser desactivada.")
+        settings_data["requires_consensus"] = True
 
         group = Group.objects.create(
             name=data["name"],
@@ -245,7 +248,10 @@ class GroupService:
             ),
         }
 
+        if data.get("requires_consensus") is False:
+            raise DomainException("A aprovação colectiva não pode ser desactivada.")
         new_settings_data.update(data)
+        new_settings_data["requires_consensus"] = True
 
         current_settings.is_active = False
         current_settings.save(
