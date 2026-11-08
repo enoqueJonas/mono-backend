@@ -392,3 +392,31 @@ class ContributionAnchorOutboxTests(TestCase):
             worker.pending_ids.assert_not_called()
             worker.process.assert_not_called()
         self.assertIn("outstanding_review=1", output.getvalue())
+
+    def test_mined_failed_receipt_requires_review_not_automatic_retry(self):
+        contribution = self.queue()
+        client = MagicMock()
+        client.get_contribution.return_value = {"exists": False}
+        client.register_contribution.return_value = SimpleNamespace(status=False)
+        with self.assertRaises(ContributionAnchorSubmissionUncertain):
+            ContributionAnchorService(client=client).anchor(
+                contribution,
+                expected_hash=ContributionHashService.calculate(contribution),
+            )
+        client.register_contribution.assert_called_once()
+
+    def test_worker_quarantines_nonconfirmed_receipt(self):
+        contribution = self.queue()
+        intent = contribution.anchor_intent
+        with patch(
+            "contributions.services.anchor_outbox_service.ContributionAnchorService"
+        ) as service:
+            service.return_value.anchor.return_value = SimpleNamespace(
+                status=BlockchainAnchorStatus.FAILED
+            )
+            self.assertEqual(
+                ContributionAnchorOutboxService.process(intent.pk),
+                ContributionAnchorIntent.Status.REVIEW_REQUIRED,
+            )
+        intent.refresh_from_db()
+        self.assertIsNone(intent.next_attempt_at)
