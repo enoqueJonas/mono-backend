@@ -46,6 +46,7 @@ class ContributionAnchorService:
         contribution: Contribution,
         *,
         expected_hash: str | None = None,
+        allow_submit: bool = True,
     ) -> BlockchainAnchor:
         """Submit once or reconcile a previously mined transaction.
 
@@ -67,6 +68,14 @@ class ContributionAnchorService:
             # Failure could have occurred after EVM mining and before SQL write.
             receipt = self.client.recover_anchoring_receipt(str(contribution.id))
         else:
+            # An expired PROCESSING lease may mean the previous worker
+            # crashed after broadcasting. Never send a second transaction
+            # just because a *currently* unmined contribution is absent.
+            if not allow_submit:
+                raise ContributionAnchorSubmissionUncertain(
+                    "Unresolved previous submission; require operator review "
+                    "if the original transaction has not been mined."
+                )
             # A transport timeout or RPC exception during broadcast does
             # NOT prove the transaction was rejected or never entered the
             # mempool. Do not automatically retry an uncertain submission.
