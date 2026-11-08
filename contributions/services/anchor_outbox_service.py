@@ -139,7 +139,9 @@ class ContributionAnchorOutboxService:
                 allow_submit=not stale_processing,
             )
             if anchor.status != BlockchainAnchorStatus.CONFIRMED:
-                raise ValueError("Contribution anchoring receipt not confirmed.")
+                raise ContributionAnchorSubmissionUncertain(
+                    "Contribution receipt is not confirmed; review required."
+                )
         except Exception as exc:
             status = (
                 ContributionAnchorIntent.Status.REVIEW_REQUIRED
