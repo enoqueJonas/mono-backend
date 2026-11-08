@@ -21,6 +21,10 @@ class ContributionAnchorHashMismatch(ValueError):
     """Ambiguous chain/local hashes require human review, never blind retry."""
 
 
+class ContributionAnchorSubmissionUncertain(RuntimeError):
+    """The send may have reached a node. Never automatically broadcast again."""
+
+
 class ContributionAnchorService:
     def __init__(
         self,
@@ -63,10 +67,19 @@ class ContributionAnchorService:
             # Failure could have occurred after EVM mining and before SQL write.
             receipt = self.client.recover_anchoring_receipt(str(contribution.id))
         else:
-            receipt = self.client.register_contribution(
-                contribution_id=str(contribution.id),
-                contribution_hash=contribution_hash,
-            )
+            # A transport timeout or RPC exception during broadcast does
+            # NOT prove the transaction was rejected or never entered the
+            # mempool. Do not automatically retry an uncertain submission.
+            try:
+                receipt = self.client.register_contribution(
+                    contribution_id=str(contribution.id),
+                    contribution_hash=contribution_hash,
+                )
+            except Exception as exc:
+                raise ContributionAnchorSubmissionUncertain(
+                    "Contribution submission outcome is not verified; "
+                    "requires operator reconciliation before any new send."
+                ) from exc
 
         if not receipt.status:
             raise ValueError("Contribution transaction receipt was unsuccessful.")
