@@ -78,19 +78,16 @@ em `CONFIRMED`.
 
 ## 4. Provas executadas
 
-### Django — 154 testes aprovados
+### Django — 166 testes aprovados
 
 GitHub Actions de backend inclui testes para intenção criada antes de RPC,
 quorum RN06 bloqueado por intenção pendente, retry idempotente, falha RPC,
 hash incompatível e dados inválidos. `makemigrations --check --dry-run`
 também passa com a nova migração `contributions/0006`.
 
-### PostgreSQL/Ganache — 12 testes aprovados
+### PostgreSQL/Ganache — 15 testes aprovados
 
-Doze testes numa workflow: **seis com Ganache real** (cinco cenários de
-credenciais/registos e um de recuperação de contribuição) e **seis de
-concorrência PostgreSQL com RPC simulada** (cinco locks originais e um
-RPC demorado). A migração histórica `disbursements/0001 → 0002` é uma
+Quinze testes numa workflow: **sete com Ganache real** (cinco cenários de credenciais/registos e dois de recuperação de contribuição) e **oito testes PostgreSQL de concorrência e operação com RPC simulada** (bloqueios de filiação e contribuições, operador EVM e execução controlada do worker). A migração histórica `disbursements/0001 → 0002` é uma
 verificação separada dentro da mesma workflow.
 
 O ensaio de recuperação de contribuição confirma:
@@ -142,3 +139,42 @@ interfaces financeiras externas.
 **Conclusão:** os resultados sustentam uma melhoria de disponibilidade
 durante RPC e de recuperabilidade após falhas de persistência, em ambiente
 experimental. Não validam prevenção de fraude financeira operacional.
+
+
+## 6. Operação controlada e resultados de envio incertos — 8/11/2026
+
+A segunda revisão evita o erro de transformar um timeout numa autorização para voltar a transmitir. Se `registerContribution` falhar **durante ou depois do envio**, o resultado pode ser desconhecido. O serviço converte-o em `ContributionAnchorSubmissionUncertain`, marca `REVIEW_REQUIRED` e **não** faz nova submissão automática. Se o worker terminar enquanto um intento se encontra `PROCESSING`, a retomada após expiração do lease consulta a blockchain em modo **apenas reconciliação** (`allow_submit=False`), não assume que a ausência temporária no estado confirmado significa inexistência no mempool.
+
+O processamento de contribuições utiliza um `pg_try_advisory_lock` de sessão PostgreSQL, derivado do identificador de rede e endereço de conta operadora. Isto serializa **workers de ancoragem de contribuições que utilizem o mesmo PostgreSQL e esta implementação**, sem reter `Group.select_for_update` durante a operação RPC. O bloqueio é não bloqueante: quando outro processo o detém, a intenção não é modificada e pode ser retomada mais tarde. A regra não abrange automaticamente ancoragens de grupos ou credenciais, nem serviços ligados a outra base de dados.
+
+As falhas com resultado certamente não confirmado são espaçadas com *backoff* exponencial a partir de 15 segundos até ao máximo de uma hora. Após **seis tentativas**, o intento fica em `REVIEW_REQUIRED`; não existe loop infinito de reenvios. O estado e a próxima tentativa elegível são persistidos em `ContributionAnchorIntent.next_attempt_at`, introduzido pela migração `contributions/0007_contribution_intent_retry_schedule.py`.
+
+### Comandos disponíveis (ambiente experimental)
+
+```bash
+# Inspecção de saúde sem assinatura e sem qualquer transmissão Ethereum.
+python manage.py reconcile_contribution_anchors --dry-run --fail-on-review
+
+# Uma passagem limitada de intents elegíveis.
+python manage.py reconcile_contribution_anchors --limit 25
+
+# Processamento em ciclos finitos, explicitamente autorizado pelo operador.
+CONTRIBUTION_ANCHOR_WORKER_ENABLED=1 \
+python manage.py reconcile_contribution_anchors --cycles 12 --poll-seconds 30 --limit 25 --fail-on-review
+
+# Apenas verificar se transacções QUARENTENADAS já foram mineradas;
+# NÃO submete novas transacções.
+python manage.py reconcile_contribution_anchors --review-only --limit 25
+```
+
+O comando emite contadores `outstanding_pending`, `outstanding_processing`, `outstanding_review`, `total_confirmed` e `oldest_pending_seconds` para integração futura com monitorização. A execução por vários ciclos exige explicitamente PostgreSQL e `CONTRIBUTION_ANCHOR_WORKER_ENABLED=1`, e termina depois do número finito de ciclos. **Não foi instalado nem activado um serviço de fundo**, um cron de produção, um scheduler em nuvem ou qualquer automação com chaves reais.
+
+### Evidência suplementar
+
+- **166/166 testes Django:** intenções, recuperação, limites de tentativas, diagnóstico `--dry-run`, revisão sem broadcast, leases expirados e isolamento dos estados de pagamento/ancoragem.
+- **15/15 na workflow PostgreSQL/Ganache:** sete com Ganache real e oito de testes PostgreSQL de concorrência/execução controlada com RPC isolada. A migração histórica é ensaio adicional em etapa distinta do workflow.
+- **18/18 Brownie:** contratos Solidity em testes independentes.
+- **Nova prova de falha ambígua real em Ganache:** `CONTRIBUTION_UNCERTAIN_SEND_E2E mined_then_timeout=True quarantined=True review_only_recovered=True second_broadcast=False`. A transacção foi minerada, o cliente lançou um timeout artificial depois da mineração; o processo não retransmitiu até haver reconciliação explícita que recuperou o recibo original.
+- **Prova do operador concorrente:** dois processos Django/PostgreSQL distintos não adquirem simultaneamente o mesmo advisory lock; o lock é libertado depois do processamento.
+
+**Limitações:** não há supervisor operacional, alarmes entregues a responsáveis, gestão transversal de nonces com os fluxos de grupos e VCs, confirmação de finalidade de rede pública, integração M-Pesa/e-Mola, nem controlo de fundos. A aplicação mantém custódia centralizada das chaves (issue #29) e a política financeira de ex-membros permanece indefinida (issue #28). O PR continua em rascunho: estas melhorias laboratoriais não equivalem a aprovação de produção.
