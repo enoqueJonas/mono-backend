@@ -11,7 +11,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import User
-from contributions.models import Contribution
+from contributions.models import Contribution, ContributionAnchorIntent
 from groups.models import (
     Group,
     GroupMember,
@@ -129,9 +129,14 @@ class MobileWalletWebhookAPITests(APITestCase):
             Contribution.Status.CONFIRMED,
         )
 
-        self.mock_anchor_service.return_value.anchor.assert_called_once_with(
-            contribution
+        # Under TestCase's outer rollback, on_commit callbacks are never run.
+        # The durable intent is nevertheless created atomically; no network
+        # operation is allowed inside the Group row lock.
+        self.assertEqual(
+            contribution.anchor_intent.status,
+            ContributionAnchorIntent.Status.PENDING,
         )
+        self.mock_anchor_service.return_value.anchor.assert_not_called()
 
         self.assertEqual(
             response.data["data"]["reference"],
