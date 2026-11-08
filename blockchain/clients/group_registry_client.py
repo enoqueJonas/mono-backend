@@ -13,6 +13,7 @@ from blockchain.domain.blockchain_receipt import (
 from blockchain.exceptions import (
     BlockchainConnectionError,
 )
+from blockchain.security.registry_operator import require_registry_operator
 from blockchain.services.transaction_service import (
     TransactionService,
 )
@@ -54,6 +55,12 @@ class GroupRegistryClient:
         self.contract = self.web3.eth.contract(
             address=contract_address,
             abi=self._load_abi(),
+        )
+
+        require_registry_operator(
+            web3=self.web3,
+            contract=self.contract,
+            config=self.config,
         )
 
         self.transaction_service = TransactionService(
