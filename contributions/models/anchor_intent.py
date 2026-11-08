@@ -35,4 +35,7 @@ class ContributionAnchorIntent(models.Model):
 
     class Meta:
         db_table = "contribution_anchor_intents"
-        indexes = [models.Index(fields=["status", "created_at"], name="contr_anchor_status_idx")]
+        indexes = [
+            models.Index(fields=["status", "created_at"], name="contr_anchor_status_idx"),
+            models.Index(fields=["status", "next_attempt_at"], name="contr_anchor_due_idx"),
+        ]
