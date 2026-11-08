@@ -91,7 +91,11 @@ class ContributionAnchorService:
                 ) from exc
 
         if not receipt.status:
-            raise ValueError("Contribution transaction receipt was unsuccessful.")
+            # A mined failed receipt is not safely retryable without review
+            # of transaction status/nonce/contract rejection details.
+            raise ContributionAnchorSubmissionUncertain(
+                "Contribution transaction failed; operator review is required."
+            )
 
         # This short SQL transaction occurs only *after* the RPC has finished.
         with transaction.atomic():
