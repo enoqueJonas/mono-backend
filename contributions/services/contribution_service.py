@@ -5,7 +5,9 @@ from django.utils import timezone
 
 from blockchain.services.contribution_anchor_service import ContributionAnchorService
 from core.exceptions import DomainException
-from contributions.models import Contribution
+from contributions.models import Contribution, ContributionAnchorIntent
+from contributions.services.contribution_hash_service import ContributionHashService
+from contributions.services.anchor_outbox_service import ContributionAnchorOutboxService
 from groups.models import Group, GroupMember
 
 
@@ -100,7 +102,7 @@ class ContributionService:
             status=Contribution.Status.CONFIRMED,
         )
 
-        ContributionAnchorService().anchor(contribution)
+        ContributionService._enqueue_anchor(contribution)
         return contribution
 
     @staticmethod
@@ -159,8 +161,27 @@ class ContributionService:
             status=Contribution.Status.CONFIRMED,
         )
 
-        ContributionAnchorService().anchor(contribution)
+        ContributionService._enqueue_anchor(contribution)
         return contribution
+
+    @staticmethod
+    def _enqueue_anchor(contribution: Contribution) -> None:
+        """Persist hash and intent before any irreversible blockchain action.
+
+        on_commit executes only *after* the enclosing SQL transaction releases
+        Group row locks. If the process dies before callback, the retry command
+        finds the durable PENDING intent. Errors do not delete the contribution.
+        """
+        intent = ContributionAnchorIntent.objects.create(
+            contribution=contribution,
+            content_hash=ContributionHashService.calculate(contribution),
+        )
+        transaction.on_commit(
+            lambda intent_id=intent.pk: ContributionAnchorOutboxService.process(
+                intent_id
+            ),
+            robust=True,
+        )
 
     @staticmethod
     def _generate_manual_reference() -> str:
