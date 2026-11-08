@@ -70,7 +70,7 @@ class ContributionAnchorOutboxService:
         return timedelta(seconds=min(3600, 15 * 2 ** min(max(attempt_count - 1, 0), 8)))
 
     @classmethod
-    def process(cls, intent_id):
+    def process(cls, intent_id, *, reconcile_only=False):
         with cls._operator_lock() as acquired:
             if not acquired:
                 # A different worker owns the signer. Leave this intent
@@ -78,17 +78,21 @@ class ContributionAnchorOutboxService:
                 return ContributionAnchorIntent.objects.only("status").get(
                     pk=intent_id
                 ).status
-            return cls._process_with_signer_lock(intent_id)
+            return cls._process_with_signer_lock(
+                intent_id, reconcile_only=reconcile_only,
+            )
 
     @classmethod
-    def _process_with_signer_lock(cls, intent_id):
+    def _process_with_signer_lock(cls, intent_id, *, reconcile_only=False):
         """Claim in a short SQL transaction, then make the network call."""
         now = timezone.now()
         with transaction.atomic():
             intent = ContributionAnchorIntent.objects.select_for_update().get(pk=intent_id)
-            if intent.status in (
-                ContributionAnchorIntent.Status.CONFIRMED,
-                ContributionAnchorIntent.Status.REVIEW_REQUIRED,
+            if intent.status == ContributionAnchorIntent.Status.CONFIRMED:
+                return intent.status
+            if (
+                intent.status == ContributionAnchorIntent.Status.REVIEW_REQUIRED
+                and not reconcile_only
             ):
                 return intent.status
             if (
@@ -101,7 +105,11 @@ class ContributionAnchorOutboxService:
             # A worker that died while PROCESSING may have broadcast
             # already; stale leases must inspect chain state but NOT send.
             stale_processing = (
-                intent.status == ContributionAnchorIntent.Status.PROCESSING
+                reconcile_only
+                or intent.status in (
+                    ContributionAnchorIntent.Status.PROCESSING,
+                    ContributionAnchorIntent.Status.REVIEW_REQUIRED,
+                )
             )
             token = uuid4()
             intent.status = ContributionAnchorIntent.Status.PROCESSING
