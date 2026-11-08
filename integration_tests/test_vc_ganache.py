@@ -4,6 +4,7 @@ Requires a separately running local Ganache funded with the fixed *test-only*
 private key declared in config.settings_test. Never use production keys.
 The contribution is seeded in the test DB (wallet confirmation is NOT tested).
 """
+import hashlib
 import json
 import os
 import time
@@ -29,6 +30,10 @@ CONTRACT_ARTIFACT = (
     Path(__file__).resolve().parents[1]
     / "blockchain" / "abi" / "CredentialRegistry.json"
 )
+CONTRACT_SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "smart_contracts" / "contracts" / "CredentialRegistry.sol"
+)
 
 
 def _node():
@@ -40,12 +45,39 @@ def _node():
     pytest.fail("Ganache JSON-RPC unavailable; integration test not executed")
 
 
+def _send_unauthorized_mutation(*, web3, function, unauthorized_account):
+    """A signed transaction from a funded outsider must fail on-chain."""
+    tx = function.build_transaction({
+        "from": unauthorized_account.address,
+        "nonce": web3.eth.get_transaction_count(unauthorized_account.address),
+        "chainId": web3.eth.chain_id,
+        "gas": 250_000,
+        "gasPrice": web3.eth.gas_price,
+    })
+    signed = web3.eth.account.sign_transaction(
+        tx, private_key=unauthorized_account.key
+    )
+    tx_hash = web3.eth.send_raw_transaction(signed.raw_transaction)
+    receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+    assert receipt.status == 0, "Unexpected permission for outsider transaction"
+
+
 @pytest.mark.django_db(transaction=True)
 def test_signed_vc_emission_verification_revocation_on_ganache():
     web3 = _node()
     assert web3.eth.chain_id == 1337
 
     artifact = json.loads(CONTRACT_ARTIFACT.read_text(encoding="utf-8"))
+    assert artifact["contractName"] == "CredentialRegistry"
+    assert artifact["compilerVersion"].startswith("0.8.20+")
+    assert artifact["sourceSha256"] == hashlib.sha256(
+        CONTRACT_SOURCE.read_bytes()
+    ).hexdigest(), "The deployed artifact must be compiled from this checkout"
+    assert any(
+        entry.get("type") == "function" and entry.get("name") == "operator"
+        for entry in artifact["abi"]
+    ), "Stale ABI: operator() is missing"
+
     contract_factory = web3.eth.contract(
         abi=artifact["abi"], bytecode=artifact["bytecode"]
     )
@@ -57,6 +89,31 @@ def test_signed_vc_emission_verification_revocation_on_ganache():
     contract = web3.eth.contract(
         address=deploy_receipt.contractAddress, abi=artifact["abi"]
     )
+    deployer = Web3.to_checksum_address(web3.eth.accounts[0])
+    backend_operator = Web3.to_checksum_address(settings.BLOCKCHAIN_ACCOUNT_ADDRESS)
+    assert deployer == backend_operator, (
+        "Backend signing account must match contract deployer"
+    )
+    assert Web3.to_checksum_address(contract.functions.operator().call()) == deployer
+
+    # Unlike the previous test, send real signed transactions from an outsider.
+    # The node contains a single funded deployer; create and fund a second
+    # ephemeral wallet to ensure the two identities are truly distinct.
+    outsider = web3.eth.account.create()
+    assert outsider.address != deployer
+    fund_tx = web3.eth.send_transaction({
+        "from": deployer,
+        "to": outsider.address,
+        "value": web3.to_wei(1, "ether"),
+    })
+    assert web3.eth.wait_for_transaction_receipt(fund_tx).status == 1
+    rogue_hash = Web3.keccak(text="mono-unauthorized-test-anchor")
+    _send_unauthorized_mutation(
+        web3=web3,
+        function=contract.functions.registerCredentialHash(rogue_hash),
+        unauthorized_account=outsider,
+    )
+    assert contract.functions.credentialExists(rogue_hash).call() is False
 
     # App settings are evaluated at the moment AnchorService constructs its client.
     settings.CREDENTIAL_REGISTRY_ADDRESS = deploy_receipt.contractAddress
@@ -123,6 +180,18 @@ def test_signed_vc_emission_verification_revocation_on_ganache():
         bytes.fromhex(record.credential_hash)
     ).call()
     assert stored[0] is True and stored[1] is False
+
+    _send_unauthorized_mutation(
+        web3=web3,
+        function=contract.functions.revokeCredential(
+            bytes.fromhex(record.credential_hash)
+        ),
+        unauthorized_account=outsider,
+    )
+    state_after_attack = contract.functions.getCredential(
+        bytes.fromhex(record.credential_hash)
+    ).call()
+    assert state_after_attack[1] is False
 
     client.force_authenticate(user=None)
     verified = client.post(
@@ -258,6 +327,9 @@ def test_signed_vc_emission_verification_revocation_on_ganache():
     # Evidence summary is intentionally test-only; never log private keys/PII.
     print(
         f"GANACHE_EVIDENCE chain_id={web3.eth.chain_id}"
+        f" compiled_source_sha256={artifact['sourceSha256']}"
+        f" operator_guard_verified=True outsider_register_rejected=True"
+        f" outsider_revoke_rejected=True"
         f" contract={contract.address} deployment_tx={deploy_tx.hex()}"
         f" hash={record.credential_hash} verified_before=True"
         f" tampered=False revoked=True verified_after=False"

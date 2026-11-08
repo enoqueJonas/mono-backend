@@ -30,6 +30,14 @@ class DisbursementPenaltyFlowTests(TestCase):
             password="testpass123",
         )
 
+
+        self.voter1_user = User.objects.create_user(
+            phone_number="+258846111112", password="testpass123",
+        )
+        self.voter2_user = User.objects.create_user(
+            phone_number="+258846111113", password="testpass123",
+        )
+
         self.group = Group.objects.create(
             name="Grupo Penalizações",
         )
@@ -41,7 +49,7 @@ class DisbursementPenaltyFlowTests(TestCase):
             contribution_frequency=(
                 GroupSettings.ContributionFrequency.MONTHLY
             ),
-            maximum_members=2,
+            maximum_members=4,
             rotation_strategy=(
                 GroupSettings.RotationStrategy.FIXED_ORDER
             ),
@@ -63,6 +71,15 @@ class DisbursementPenaltyFlowTests(TestCase):
             status=GroupMember.Status.ACTIVE,
         )
 
+
+        self.voter1 = GroupMember.objects.create(
+            group=self.group, user=self.voter1_user,
+            role=GroupMember.Role.MEMBER, status=GroupMember.Status.ACTIVE,
+        )
+        self.voter2 = GroupMember.objects.create(
+            group=self.group, user=self.voter2_user,
+            role=GroupMember.Role.MEMBER, status=GroupMember.Status.ACTIVE,
+        )
         self.period = date(2026, 9, 4)
         self.rotation = RotationOrder.objects.create(
             group=self.group,
@@ -94,11 +111,24 @@ class DisbursementPenaltyFlowTests(TestCase):
             contribution_period=self.period,
             reference="PEN-MAN-002",
         )
+        for num, membership in enumerate((self.voter1, self.voter2), start=3):
+            Contribution.objects.create(
+                member=membership,
+                group_settings=self.settings,
+                amount=Decimal("1000.00"),
+                currency="MZN",
+                source=Contribution.Source.MANUAL,
+                status=Contribution.Status.CONFIRMED,
+                contribution_period=self.period,
+                reference=f"PEN-MAN-{num:03}",
+            )
+
 
     def test_active_penalty_added_after_creation_blocks_approval(self):
         disbursement = DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
         self.assertEqual(
@@ -114,7 +144,7 @@ class DisbursementPenaltyFlowTests(TestCase):
         with self.assertRaises(ActivePenalty):
             DisbursementService.approve(
                 disbursement_id=disbursement.id,
-                approved_by=self.manager_user,
+                approved_by=self.voter1_user,
             )
 
         disbursement.refresh_from_db()
@@ -127,11 +157,16 @@ class DisbursementPenaltyFlowTests(TestCase):
         disbursement = DisbursementService.create(
             group_id=self.group.id,
             cycle_number=1,
+            created_by=self.manager_user,
         )
 
+        DisbursementService.approve(
+            disbursement_id=disbursement.id,
+            approved_by=self.voter1_user,
+        )
         approved = DisbursementService.approve(
             disbursement_id=disbursement.id,
-            approved_by=self.manager_user,
+            approved_by=self.voter2_user,
         )
         self.assertEqual(
             approved.status,

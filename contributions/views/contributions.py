@@ -39,6 +39,6 @@ class GroupContributionCreateView(APIView):
 
         return success(
             data=ContributionSerializer(contribution).data,
-            message="Contribution registered successfully.",
+            message="Contribution recorded in the experimental ledger; blockchain anchoring may be pending.",
             status_code=201,
         )

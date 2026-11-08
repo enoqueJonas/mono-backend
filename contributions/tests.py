@@ -4,7 +4,7 @@ from unittest.mock import patch
 from django.test import TestCase
 
 from accounts.models import User
-from contributions.models import Contribution
+from contributions.models import Contribution, ContributionAnchorIntent
 from contributions.services.contribution_service import (
     ContributionService,
     DuplicateContribution,
@@ -115,9 +115,14 @@ class MobileWalletContributionServiceTests(TestCase):
             "WALLET-001",
         )
 
-        self.mock_anchor_service.return_value.anchor.assert_called_once_with(
-            contribution
+        # Under TestCase's outer rollback, on_commit callbacks are never run.
+        # The durable intent is nevertheless created atomically; no network
+        # operation is allowed inside the Group row lock.
+        self.assertEqual(
+            contribution.anchor_intent.status,
+            ContributionAnchorIntent.Status.PENDING,
         )
+        self.mock_anchor_service.return_value.anchor.assert_not_called()
 
     def test_mobile_wallet_rejects_invalid_amount(self):
         with self.assertRaises(

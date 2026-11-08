@@ -12,7 +12,11 @@ class ContributionHashService:
             "group_settings_version": contribution.group_settings.version,
             "amount": format(contribution.amount, ".2f"),
             "currency": contribution.currency,
-            "contribution_period": contribution.contribution_period.isoformat(),
+            "contribution_period": (
+                contribution.contribution_period.isoformat()
+                if hasattr(contribution.contribution_period, "isoformat")
+                else str(contribution.contribution_period)
+            ),
             "reference": contribution.reference,
             "source": contribution.source,
             "status": contribution.status,

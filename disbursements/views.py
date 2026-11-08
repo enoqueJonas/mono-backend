@@ -56,6 +56,7 @@ class GroupDisbursementListCreateView(APIView):
 
         disbursement = DisbursementService.create(
             group_id=group_id,
+            created_by=request.user,
             cycle_number=serializer.validated_data[
                 "cycle_number"
             ],
@@ -133,7 +134,7 @@ class GroupDisbursementApproveView(APIView):
             data=DisbursementSerializer(
                 approved
             ).data,
-            message="Desembolso aprovado com sucesso.",
+            message="Voto registado; desembolso aprovado somente após quórum.",
         )
 
 

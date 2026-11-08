@@ -16,6 +16,13 @@ class CreateGroupSettingsSerializer(serializers.Serializer):
         choices=GroupSettings.RotationStrategy.choices,
     )
     requires_consensus = serializers.BooleanField(default=True)
+
+    def validate_requires_consensus(self, value):
+        if not value:
+            raise serializers.ValidationError(
+                "A aprovação colectiva não pode ser desactivada."
+            )
+        return True
     allow_manual_contributions = serializers.BooleanField(default=False)
     currency = serializers.CharField(
         max_length=3,

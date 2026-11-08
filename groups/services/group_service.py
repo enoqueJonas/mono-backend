@@ -66,6 +66,9 @@ class GroupService:
     @transaction.atomic
     def create_group(*, created_by, data: dict) -> Group:
         settings_data = data.pop("settings")
+        if settings_data.get("requires_consensus") is False:
+            raise DomainException("A aprovação colectiva não pode ser desactivada.")
+        settings_data["requires_consensus"] = True
 
         group = Group.objects.create(
             name=data["name"],
@@ -111,9 +114,13 @@ class GroupService:
         return membership
 
     @staticmethod
+    @transaction.atomic
     def add_member(*, group_id, added_by, phone_number):
+        # Serialize member insertions and LEFT->ACTIVE reactivations with
+        # RN06 group-level ledger checks. Lock the parent before reading the
+        # active-member count; locking ACTIVE rows alone misses new rows.
         try:
-            group = Group.objects.get(id=group_id)
+            group = Group.objects.select_for_update().get(id=group_id)
         except Group.DoesNotExist:
             raise GroupNotFound()
 
@@ -245,7 +252,10 @@ class GroupService:
             ),
         }
 
+        if data.get("requires_consensus") is False:
+            raise DomainException("A aprovação colectiva não pode ser desactivada.")
         new_settings_data.update(data)
+        new_settings_data["requires_consensus"] = True
 
         current_settings.is_active = False
         current_settings.save(
@@ -276,8 +286,11 @@ class GroupService:
         group_member_id,
         removed_by,
     ) -> GroupMember:
+        # Agree on one locking order with disbursement validation: Group
+        # first, then membership rows. Prevent a concurrent member exit from
+        # changing who is expected to contribute during an RN06 check.
         try:
-            group = Group.objects.get(id=group_id)
+            group = Group.objects.select_for_update().get(id=group_id)
         except Group.DoesNotExist:
             raise GroupNotFound()
 

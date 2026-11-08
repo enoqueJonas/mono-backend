@@ -30,6 +30,13 @@ class UpdateGroupSettingsSerializer(serializers.Serializer):
         required=False,
     )
 
+    def validate_requires_consensus(self, value):
+        if not value:
+            raise serializers.ValidationError(
+                "A aprovação colectiva não pode ser desactivada."
+            )
+        return True
+
     allow_manual_contributions = serializers.BooleanField(
         required=False,
     )

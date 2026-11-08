@@ -5,7 +5,9 @@ from django.utils import timezone
 
 from blockchain.services.contribution_anchor_service import ContributionAnchorService
 from core.exceptions import DomainException
-from contributions.models import Contribution
+from contributions.models import Contribution, ContributionAnchorIntent
+from contributions.services.contribution_hash_service import ContributionHashService
+from contributions.services.anchor_outbox_service import ContributionAnchorOutboxService
 from groups.models import Group, GroupMember
 
 
@@ -50,8 +52,12 @@ class ContributionService:
         registered_by,
         data: dict,
     ) -> Contribution:
+        # Every ledger writer must acquire the Group row lock before
+        # checking membership, settings or inserting new contributions.
+        # RN06 uses this same parent-row lock to avoid contribution phantoms
+        # while evaluating a disbursement.
         try:
-            group = Group.objects.get(id=group_id)
+            group = Group.objects.select_for_update().get(id=group_id)
         except Group.DoesNotExist:
             raise GroupNotFound()
 
@@ -96,7 +102,7 @@ class ContributionService:
             status=Contribution.Status.CONFIRMED,
         )
 
-        ContributionAnchorService().anchor(contribution)
+        ContributionService._enqueue_anchor(contribution)
         return contribution
 
     @staticmethod
@@ -105,8 +111,11 @@ class ContributionService:
         *,
         data: dict,
     ) -> Contribution:
+        # Coordinate simulated provider writes with RN06's financial snapshot.
+        # A member/period UNIQUE constraint alone does not prevent phantom
+        # contributions from other members during a disbursement check.
         try:
-            group = Group.objects.get(id=data["group_id"])
+            group = Group.objects.select_for_update().get(id=data["group_id"])
         except Group.DoesNotExist:
             raise GroupNotFound()
 
@@ -152,8 +161,27 @@ class ContributionService:
             status=Contribution.Status.CONFIRMED,
         )
 
-        ContributionAnchorService().anchor(contribution)
+        ContributionService._enqueue_anchor(contribution)
         return contribution
+
+    @staticmethod
+    def _enqueue_anchor(contribution: Contribution) -> None:
+        """Persist hash and intent before any irreversible blockchain action.
+
+        on_commit executes only *after* the enclosing SQL transaction releases
+        Group row locks. If the process dies before callback, the retry command
+        finds the durable PENDING intent. Errors do not delete the contribution.
+        """
+        intent = ContributionAnchorIntent.objects.create(
+            contribution=contribution,
+            content_hash=ContributionHashService.calculate(contribution),
+        )
+        transaction.on_commit(
+            lambda intent_id=intent.pk: ContributionAnchorOutboxService.process(
+                intent_id
+            ),
+            robust=True,
+        )
 
     @staticmethod
     def _generate_manual_reference() -> str:
