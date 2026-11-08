@@ -296,3 +296,56 @@ class ContributionAnchorOutboxTests(TestCase):
                 "--cycles", "2",
                 "--poll-seconds", "1",
             )
+
+    def test_review_only_reconciles_existing_anchor_without_allowing_send(self):
+        contribution = self.queue()
+        intent = contribution.anchor_intent
+        intent.status = ContributionAnchorIntent.Status.REVIEW_REQUIRED
+        intent.save(update_fields=["status"])
+        with patch(
+            "contributions.services.anchor_outbox_service.ContributionAnchorService"
+        ) as svc:
+            svc.return_value.anchor.return_value = SimpleNamespace(
+                status=BlockchainAnchorStatus.CONFIRMED
+            )
+            result = ContributionAnchorOutboxService.process(
+                intent.pk, reconcile_only=True
+            )
+            self.assertEqual(result, ContributionAnchorIntent.Status.CONFIRMED)
+            self.assertFalse(svc.return_value.anchor.call_args.kwargs["allow_submit"])
+
+    def test_review_only_command_selects_quarantine_without_send_permission(self):
+        contribution = self.queue()
+        intent = contribution.anchor_intent
+        intent.status = ContributionAnchorIntent.Status.REVIEW_REQUIRED
+        intent.save(update_fields=["status"])
+        output = StringIO()
+        with patch(
+            "contributions.management.commands.reconcile_contribution_anchors."
+            "ContributionAnchorOutboxService"
+        ) as worker:
+            worker.process.return_value = ContributionAnchorIntent.Status.CONFIRMED
+            call_command(
+                "reconcile_contribution_anchors",
+                "--review-only", "--limit", "1",
+                stdout=output,
+            )
+            worker.pending_ids.assert_not_called()
+            worker.process.assert_called_once_with(
+                intent.pk, reconcile_only=True
+            )
+        self.assertIn("review_only=1", output.getvalue())
+
+    def test_unknown_network_broadcast_is_wrapped_as_uncertain(self):
+        contribution = self.queue()
+        client = MagicMock()
+        client.get_contribution.return_value = {"exists": False}
+        client.register_contribution.side_effect = TimeoutError(
+            "synthetic RPC timeout after broadcast"
+        )
+        with self.assertRaises(ContributionAnchorSubmissionUncertain):
+            ContributionAnchorService(client=client).anchor(
+                contribution,
+                expected_hash=ContributionHashService.calculate(contribution),
+            )
+        client.register_contribution.assert_called_once()
