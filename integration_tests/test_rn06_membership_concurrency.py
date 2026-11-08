@@ -121,7 +121,7 @@ class RN06MembershipLockingTests(TransactionTestCase):
     def test_manual_contribution_cannot_be_inserted_during_group_snapshot(self):
         # External anchoring is deliberately mocked: this test measures SQL
         # transaction serialization, not Ganache availability.
-        with patch("contributions.services.contribution_service.ContributionAnchorService"):
+        with patch("contributions.services.contribution_service.ContributionAnchorOutboxService"):
             contribution = self._must_wait_for_group_lock(
                 lambda: ContributionService.register_manual_contribution(
                     group_id=self.group.pk,
@@ -137,7 +137,7 @@ class RN06MembershipLockingTests(TransactionTestCase):
 
     def test_simulated_wallet_contribution_cannot_be_inserted_during_group_snapshot(self):
         # The callback is a simulation; we only exercise its DB write path.
-        with patch("contributions.services.contribution_service.ContributionAnchorService"):
+        with patch("contributions.services.contribution_service.ContributionAnchorOutboxService"):
             contribution = self._must_wait_for_group_lock(
                 lambda: ContributionService.register_mobile_wallet_contribution(
                     data={
