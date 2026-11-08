@@ -50,8 +50,12 @@ class ContributionService:
         registered_by,
         data: dict,
     ) -> Contribution:
+        # Every ledger writer must acquire the Group row lock before
+        # checking membership, settings or inserting new contributions.
+        # RN06 uses this same parent-row lock to avoid contribution phantoms
+        # while evaluating a disbursement.
         try:
-            group = Group.objects.get(id=group_id)
+            group = Group.objects.select_for_update().get(id=group_id)
         except Group.DoesNotExist:
             raise GroupNotFound()
 
@@ -105,8 +109,11 @@ class ContributionService:
         *,
         data: dict,
     ) -> Contribution:
+        # Coordinate simulated provider writes with RN06's financial snapshot.
+        # A member/period UNIQUE constraint alone does not prevent phantom
+        # contributions from other members during a disbursement check.
         try:
-            group = Group.objects.get(id=data["group_id"])
+            group = Group.objects.select_for_update().get(id=data["group_id"])
         except Group.DoesNotExist:
             raise GroupNotFound()
 
