@@ -6,6 +6,7 @@ from contributions.models import Contribution
 class ContributionSerializer(serializers.ModelSerializer):
     member_name = serializers.SerializerMethodField()
     group_name = serializers.SerializerMethodField()
+    anchoring_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Contribution
@@ -19,6 +20,7 @@ class ContributionSerializer(serializers.ModelSerializer):
             "reference",
             "source",
             "status",
+            "anchoring_status",
             "created_at",
         )
 
@@ -27,3 +29,12 @@ class ContributionSerializer(serializers.ModelSerializer):
 
     def get_group_name(self, obj):
         return obj.member.group.name
+
+    def get_anchoring_status(self, obj):
+        # Old imported contributions have no verified intent. Do not imply
+        # that an absent intent means an existing on-chain proof.
+        from contributions.models import ContributionAnchorIntent
+        try:
+            return obj.anchor_intent.status
+        except ContributionAnchorIntent.DoesNotExist:
+            return "UNTRACKED_LEGACY"
