@@ -9,6 +9,7 @@ from collections import Counter
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
+from django.db.models import Count
 from django.utils import timezone
 
 from contributions.models import ContributionAnchorIntent
@@ -43,8 +44,9 @@ class Command(BaseCommand):
     @staticmethod
     def _snapshot():
         statuses = dict(
-            ContributionAnchorIntent.objects.values_list("status").order_by()
-            .annotate(count=__import__("django").db.models.Count("id"))
+            ContributionAnchorIntent.objects.values("status")
+            .annotate(count=Count("id"))
+            .values_list("status", "count")
         )
         total_pending = statuses.get(ContributionAnchorIntent.Status.PENDING, 0)
         total_processing = statuses.get(
