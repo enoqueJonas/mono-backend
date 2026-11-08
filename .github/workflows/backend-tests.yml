@@ -21,6 +21,10 @@ jobs:
           python -m pip install -r requirements-dev.txt
       - name: Compile Python code
         run: python -m compileall -q accounts blockchain contributions core credentials disbursements groups identity penalties wallets config
+      - name: Check Django model/migration consistency
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings_test
+        run: python manage.py makemigrations --check --dry-run --noinput
       - name: Collect tests
         run: python -m pytest --collect-only -q
       - name: Run Django suite
