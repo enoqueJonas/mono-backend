@@ -33,6 +33,13 @@ class Command(BaseCommand):
             help="Seconds between bounded cycles.",
         )
         parser.add_argument(
+            "--review-only", action="store_true",
+            help=(
+                "Explicitly reconcile quarantined intents with existing chain "
+                "events only; NEVER broadcast a new transaction."
+            ),
+        )
+        parser.add_argument(
             "--dry-run", action="store_true",
             help="Read-only status counts; never sign or broadcast anything.",
         )
@@ -90,11 +97,24 @@ class Command(BaseCommand):
 
         for cycle in range(1, cycles + 1):
             stats = Counter()
-            ids = [] if options["dry_run"] else (
-                ContributionAnchorOutboxService.pending_ids(limit=limit)
-            )
+            if options["dry_run"]:
+                ids = []
+            elif options["review_only"]:
+                ids = list(
+                    ContributionAnchorIntent.objects.filter(
+                        status=ContributionAnchorIntent.Status.REVIEW_REQUIRED
+                    ).order_by("created_at").values_list("id", flat=True)[:limit]
+                )
+            else:
+                ids = ContributionAnchorOutboxService.pending_ids(limit=limit)
+
             for intent_id in ids:
-                status = ContributionAnchorOutboxService.process(intent_id)
+                if options["review_only"]:
+                    status = ContributionAnchorOutboxService.process(
+                        intent_id, reconcile_only=True,
+                    )
+                else:
+                    status = ContributionAnchorOutboxService.process(intent_id)
                 stats[status] += 1
 
             snapshot = self._snapshot()
@@ -102,6 +122,7 @@ class Command(BaseCommand):
                 "CONTRIBUTION_ANCHOR_RECOVERY "
                 f"cycle={cycle} "
                 f"dry_run={int(options['dry_run'])} "
+                f"review_only={int(options['review_only'])} "
                 f"attempted={len(ids)} "
                 f"confirmed={stats['CONFIRMED']} "
                 f"pending={stats['PENDING']} "
