@@ -1,6 +1,8 @@
 from pathlib import Path
 import shutil
 
+from scripts.deploy_guard import assert_deployer_matches_backend
+
 from brownie import (
     ContributionRegistry,
     CredentialRegistry,
@@ -77,27 +79,34 @@ def get_account():
 def main():
     account = get_account()
 
+    # 'onlyOperator' is immutable and points to the deployer. Deploying with
+    # the wrong Ganache/Brownie account would make every backend write fail.
+    assert_deployer_matches_backend(account.address, PROJECT_ROOT / ".env")
+
     credential_registry = CredentialRegistry.deploy({"from": account})
     group_registry = GroupRegistry.deploy({"from": account})
     contribution_registry = ContributionRegistry.deploy({"from": account})
 
-    try:
-        _copy_backend_abi("CredentialRegistry")
-        _copy_backend_abi("GroupRegistry")
-        _copy_backend_abi("ContributionRegistry")
+    # Fail loudly on incomplete artifact/environment synchronization. Never
+    # print "Backend updated" after a failed copy or .env write.
+    _copy_backend_abi("CredentialRegistry")
+    _copy_backend_abi("GroupRegistry")
+    _copy_backend_abi("ContributionRegistry")
 
-        _update_backend_env(
-            credential_registry_address=credential_registry.address,
-            group_registry_address=group_registry.address,
-            contribution_registry_address=contribution_registry.address,
-        )
+    _update_backend_env(
+        credential_registry_address=credential_registry.address,
+        group_registry_address=group_registry.address,
+        contribution_registry_address=contribution_registry.address,
+    )
 
-        print("✓ CredentialRegistry ABI copied")
-        print("✓ GroupRegistry ABI copied")
-        print("✓ ContributionRegistry ABI copied")
-        print("✓ .env updated")
-    except Exception as exc:
-        print(f"⚠ Backend synchronization failed: {exc}")
+    # Confirm the real contracts still expose the authorized immutable operator.
+    for contract in (credential_registry, group_registry, contribution_registry):
+        if str(contract.operator()).lower() != str(account.address).lower():
+            raise RuntimeError(
+                "Deployed registry operator is not the validated backend signer."
+            )
+
+    print("✓ Registry artifacts and backend addresses synchronized")
 
     print("=" * 60)
     print("Contracts deployed successfully")
