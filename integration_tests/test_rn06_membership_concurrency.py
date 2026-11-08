@@ -10,8 +10,10 @@ ACTIVE members alone is insufficient for new member rows (phantoms).
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 from datetime import date
+from io import StringIO
 from decimal import Decimal
 from unittest.mock import patch
+from django.core.management import call_command
 from threading import Event
 
 import pytest
@@ -234,3 +236,28 @@ class RN06MembershipLockingTests(TransactionTestCase):
 
         with ContributionAnchorOutboxService._operator_lock() as reacquired:
             self.assertTrue(reacquired, "Signer advisory lock was not released")
+
+    def test_bounded_poller_requires_explicit_optin_and_exits_after_two_cycles(self):
+        """No daemon/service starts; only two controlled command cycles run."""
+        output = StringIO()
+        with patch.dict(
+            "os.environ", {"CONTRIBUTION_ANCHOR_WORKER_ENABLED": "1"}
+        ), patch(
+            "contributions.management.commands.reconcile_contribution_anchors."
+            "ContributionAnchorOutboxService.pending_ids",
+            return_value=[],
+        ) as pending, patch(
+            "contributions.management.commands.reconcile_contribution_anchors."
+            "time.sleep"
+        ) as sleep:
+            call_command(
+                "reconcile_contribution_anchors",
+                "--cycles", "2",
+                "--poll-seconds", "1",
+                stdout=output,
+            )
+        self.assertEqual(pending.call_count, 2)
+        sleep.assert_called_once_with(1)
+        self.assertEqual(
+            output.getvalue().count("CONTRIBUTION_ANCHOR_RECOVERY"), 2
+        )
