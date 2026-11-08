@@ -114,9 +114,13 @@ class GroupService:
         return membership
 
     @staticmethod
+    @transaction.atomic
     def add_member(*, group_id, added_by, phone_number):
+        # Serialize member insertions and LEFT->ACTIVE reactivations with
+        # RN06 group-level ledger checks. Lock the parent before reading the
+        # active-member count; locking ACTIVE rows alone misses new rows.
         try:
-            group = Group.objects.get(id=group_id)
+            group = Group.objects.select_for_update().get(id=group_id)
         except Group.DoesNotExist:
             raise GroupNotFound()
 
@@ -282,8 +286,11 @@ class GroupService:
         group_member_id,
         removed_by,
     ) -> GroupMember:
+        # Agree on one locking order with disbursement validation: Group
+        # first, then membership rows. Prevent a concurrent member exit from
+        # changing who is expected to contribute during an RN06 check.
         try:
-            group = Group.objects.get(id=group_id)
+            group = Group.objects.select_for_update().get(id=group_id)
         except Group.DoesNotExist:
             raise GroupNotFound()
 
