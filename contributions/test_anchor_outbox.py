@@ -1,17 +1,21 @@
 """Durable contribution intent and retry tests (mocked RPC boundary only)."""
-from datetime import date
+from datetime import date, timedelta
 from io import StringIO
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.core.management import call_command
+from django.core.management.base import CommandError
+from django.utils import timezone
 from django.test import TestCase
 
 from accounts.models import User
 from blockchain.models import BlockchainAnchorStatus
 from blockchain.services.contribution_anchor_service import (
     ContributionAnchorHashMismatch,
+    ContributionAnchorService,
+    ContributionAnchorSubmissionUncertain,
 )
 from contributions.models import Contribution, ContributionAnchorIntent
 from contributions.serializers.contribution import ContributionSerializer
@@ -185,3 +189,110 @@ class ContributionAnchorOutboxTests(TestCase):
             worker.process.assert_called_once_with(contribution.anchor_intent.pk)
         self.assertIn("attempted=1", output.getvalue())
         self.assertIn("confirmed=1", output.getvalue())
+
+    def test_uncertain_submission_is_quarantined_instead_of_auto_rebroadcast(self):
+        contribution = self.queue()
+        intent = contribution.anchor_intent
+        with patch(
+            "contributions.services.anchor_outbox_service.ContributionAnchorService"
+        ) as svc:
+            svc.return_value.anchor.side_effect = (
+                ContributionAnchorSubmissionUncertain("broadcast outcome unknown")
+            )
+            self.assertEqual(
+                ContributionAnchorOutboxService.process(intent.pk),
+                ContributionAnchorIntent.Status.REVIEW_REQUIRED,
+            )
+            self.assertEqual(
+                ContributionAnchorOutboxService.process(intent.pk),
+                ContributionAnchorIntent.Status.REVIEW_REQUIRED,
+            )
+            svc.return_value.anchor.assert_called_once()
+        intent.refresh_from_db()
+        self.assertIsNone(intent.next_attempt_at)
+        self.assertEqual(intent.last_error_code, "ContributionAnchorSubmissionUncertain")
+
+    def test_stale_processing_claim_is_reconciliation_only(self):
+        contribution = self.queue()
+        intent = contribution.anchor_intent
+        intent.status = ContributionAnchorIntent.Status.PROCESSING
+        intent.claimed_at = timezone.now() - timedelta(minutes=20)
+        intent.save(update_fields=["status", "claimed_at"])
+        with patch(
+            "contributions.services.anchor_outbox_service.ContributionAnchorService"
+        ) as svc:
+            svc.return_value.anchor.return_value = SimpleNamespace(
+                status=BlockchainAnchorStatus.CONFIRMED
+            )
+            self.assertEqual(
+                ContributionAnchorOutboxService.process(intent.pk),
+                ContributionAnchorIntent.Status.CONFIRMED,
+            )
+            self.assertFalse(svc.return_value.anchor.call_args.kwargs["allow_submit"])
+
+    def test_reconcile_only_does_not_call_register_contribution(self):
+        contribution = self.queue()
+        client = MagicMock()
+        client.get_contribution.return_value = {"exists": False}
+        anchor = ContributionAnchorService(client=client)
+        with self.assertRaises(ContributionAnchorSubmissionUncertain):
+            anchor.anchor(
+                contribution,
+                expected_hash=ContributionHashService.calculate(contribution),
+                allow_submit=False,
+            )
+        client.register_contribution.assert_not_called()
+
+    def test_rpc_failure_uses_backoff_in_due_worker_queue(self):
+        contribution = self.queue()
+        intent = contribution.anchor_intent
+        with patch(
+            "contributions.services.anchor_outbox_service.ContributionAnchorService"
+        ) as svc:
+            svc.return_value.anchor.side_effect = TimeoutError("test timeout")
+            self.assertEqual(
+                ContributionAnchorOutboxService.process(intent.pk),
+                ContributionAnchorIntent.Status.PENDING,
+            )
+        intent.refresh_from_db()
+        self.assertGreater(intent.next_attempt_at, timezone.now())
+        self.assertNotIn(
+            intent.pk,
+            ContributionAnchorOutboxService.pending_ids(limit=100),
+        )
+        intent.next_attempt_at = timezone.now() - timedelta(seconds=1)
+        intent.save(update_fields=["next_attempt_at"])
+        self.assertIn(
+            intent.pk,
+            ContributionAnchorOutboxService.pending_ids(limit=100),
+        )
+
+    def test_dry_run_is_read_only_and_reports_outstanding_intents(self):
+        contribution = self.queue()
+        output = StringIO()
+        with patch(
+            "contributions.management.commands.reconcile_contribution_anchors."
+            "ContributionAnchorOutboxService"
+        ) as service:
+            call_command(
+                "reconcile_contribution_anchors", "--dry-run",
+                stdout=output,
+            )
+            service.pending_ids.assert_not_called()
+            service.process.assert_not_called()
+        self.assertIn("dry_run=1", output.getvalue())
+        self.assertIn("outstanding_pending=1", output.getvalue())
+        self.assertTrue(
+            ContributionAnchorIntent.objects.filter(
+                contribution=contribution,
+                status=ContributionAnchorIntent.Status.PENDING,
+            ).exists()
+        )
+
+    def test_multi_cycle_worker_requires_explicit_opt_in_and_postgresql(self):
+        with self.assertRaises(CommandError):
+            call_command(
+                "reconcile_contribution_anchors",
+                "--cycles", "2",
+                "--poll-seconds", "1",
+            )
