@@ -24,6 +24,10 @@ class ContributionAnchorIntent(models.Model):
     )
     attempt_count = models.PositiveIntegerField(default=0)
     claimed_at = models.DateTimeField(null=True, blank=True)
+    next_attempt_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Earliest time that a bounded retry worker may claim this intent.",
+    )
     claim_token = models.UUIDField(null=True, blank=True)
     last_error_code = models.CharField(max_length=120, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
