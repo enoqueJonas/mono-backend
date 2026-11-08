@@ -21,6 +21,7 @@ from django.test import TransactionTestCase
 from accounts.models import User
 from blockchain.models import BlockchainAnchorStatus
 from contributions.services.contribution_service import ContributionService
+from contributions.services.anchor_outbox_service import ContributionAnchorOutboxService
 from groups.models import Group, GroupMember, GroupSettings
 from groups.services.group_service import GroupService
 
@@ -213,3 +214,23 @@ class RN06MembershipLockingTests(TransactionTestCase):
                 registered = register_future.result(timeout=8)
 
         self.assertEqual(registered.member_id, self.departing.pk)
+
+    def test_only_one_worker_can_hold_postgres_evm_signer_lock(self):
+        """Distinct PostgreSQL sessions must serialize the EVM signer."""
+        def second_connection():
+            from django.db import close_old_connections
+            close_old_connections()
+            try:
+                with ContributionAnchorOutboxService._operator_lock() as acquired:
+                    return acquired
+            finally:
+                close_old_connections()
+
+        with ContributionAnchorOutboxService._operator_lock() as acquired:
+            self.assertTrue(acquired)
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                other = executor.submit(second_connection).result(timeout=5)
+            self.assertFalse(other, "Two processes acquired the same signer lock")
+
+        with ContributionAnchorOutboxService._operator_lock() as reacquired:
+            self.assertTrue(reacquired, "Signer advisory lock was not released")
