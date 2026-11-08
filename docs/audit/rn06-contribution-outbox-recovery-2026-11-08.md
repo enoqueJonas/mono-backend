@@ -78,7 +78,7 @@ em `CONFIRMED`.
 
 ## 4. Provas executadas
 
-### Django — 166 testes aprovados
+### Django — 168 testes aprovados
 
 GitHub Actions de backend inclui testes para intenção criada antes de RPC,
 quorum RN06 bloqueado por intenção pendente, retry idempotente, falha RPC,
@@ -171,10 +171,12 @@ O comando emite contadores `outstanding_pending`, `outstanding_processing`, `out
 
 ### Evidência suplementar
 
-- **166/166 testes Django:** intenções, recuperação, limites de tentativas, diagnóstico `--dry-run`, revisão sem broadcast, leases expirados e isolamento dos estados de pagamento/ancoragem.
+- **168/168 testes Django:** intenções, recuperação, limites de tentativas, diagnóstico `--dry-run`, revisão sem broadcast, leases expirados e isolamento dos estados de pagamento/ancoragem.
 - **15/15 na workflow PostgreSQL/Ganache:** sete com Ganache real e oito de testes PostgreSQL de concorrência/execução controlada com RPC isolada. A migração histórica é ensaio adicional em etapa distinta do workflow.
 - **18/18 Brownie:** contratos Solidity em testes independentes.
 - **Nova prova de falha ambígua real em Ganache:** `CONTRIBUTION_UNCERTAIN_SEND_E2E mined_then_timeout=True quarantined=True review_only_recovered=True second_broadcast=False`. A transacção foi minerada, o cliente lançou um timeout artificial depois da mineração; o processo não retransmitiu até haver reconciliação explícita que recuperou o recibo original.
 - **Prova do operador concorrente:** dois processos Django/PostgreSQL distintos não adquirem simultaneamente o mesmo advisory lock; o lock é libertado depois do processamento.
 
 **Limitações:** não há supervisor operacional, alarmes entregues a responsáveis, gestão transversal de nonces com os fluxos de grupos e VCs, confirmação de finalidade de rede pública, integração M-Pesa/e-Mola, nem controlo de fundos. A aplicação mantém custódia centralizada das chaves (issue #29) e a política financeira de ex-membros permanece indefinida (issue #28). O PR continua em rascunho: estas melhorias laboratoriais não equivalem a aprovação de produção.
+
+A versão final deste ensaio classifica igualmente recibos Ethereum com execução não confirmada (`receipt.status=False`) como `REVIEW_REQUIRED`: um recibo falhado não é autorização para submissão cega de outra transacção. Dois testes unitários adicionais verificam esse comportamento, tanto na camada do cliente quanto no worker.
