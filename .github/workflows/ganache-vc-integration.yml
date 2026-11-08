@@ -56,7 +56,7 @@ jobs:
         env:
           BLOCKCHAIN_RPC_URL: http://127.0.0.1:8545
         run: |
-          python -m pytest integration_tests/test_vc_ganache.py integration_tests/test_registry_custody_ganache.py integration_tests/test_rn06_membership_concurrency.py -q -s --ds=config.settings_integration
+          python -m pytest integration_tests/test_vc_ganache.py integration_tests/test_registry_custody_ganache.py integration_tests/test_rn06_membership_concurrency.py integration_tests/test_contribution_anchor_outbox_ganache.py -q -s --ds=config.settings_integration
       - name: Show node diagnostics on failure
         if: failure()
         run: tail -n 80 /tmp/ganache-mono-audit.log || true
