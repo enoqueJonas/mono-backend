@@ -101,3 +101,16 @@ class RN06MembershipLockingTests(TransactionTestCase):
         self.assertEqual(member.status, GroupMember.Status.LEFT)
         self.departing.refresh_from_db()
         self.assertEqual(self.departing.status, GroupMember.Status.LEFT)
+
+    def test_rejoin_cannot_reactivate_left_member_during_group_ledger_snapshot(self):
+        self.departing.status = GroupMember.Status.LEFT
+        self.departing.save(update_fields=["status", "updated_at"])
+        member = self._must_wait_for_group_lock(
+            lambda: GroupService.add_member(
+                group_id=self.group.pk,
+                added_by=self.manager,
+                phone_number=self.departing_user.phone_number,
+            )
+        )
+        self.assertEqual(member.pk, self.departing.pk)
+        self.assertEqual(member.status, GroupMember.Status.ACTIVE)
