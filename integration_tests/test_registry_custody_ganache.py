@@ -47,10 +47,24 @@ def _artifact(name):
     return artifact
 
 
-def _deploy(w3, artifact, from_address):
+def _deploy(w3, artifact, from_address, private_key=None):
     factory = w3.eth.contract(abi=artifact["abi"], bytecode=artifact["bytecode"])
-    tx = factory.constructor().transact({"from": from_address})
-    receipt = w3.eth.wait_for_transaction_receipt(tx)
+    if private_key is None:
+        # The single known Ganache operator account is unlocked by the node.
+        tx_hash = factory.constructor().transact({"from": from_address})
+    else:
+        # A newly created adversarial account is NOT unlocked by Ganache.
+        # Deploy via an actual locally signed transaction, never eth_sendTransaction.
+        tx = factory.constructor().build_transaction({
+            "from": from_address,
+            "nonce": w3.eth.get_transaction_count(from_address),
+            "chainId": w3.eth.chain_id,
+            "gasPrice": w3.eth.gas_price,
+            "gas": 3_000_000,
+        })
+        signed = w3.eth.account.sign_transaction(tx, private_key)
+        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+    receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
     assert receipt.status == 1
     return w3.eth.contract(address=receipt.contractAddress, abi=artifact["abi"])
 
@@ -178,7 +192,9 @@ def test_client_refuses_foreign_operator_wrong_chain_and_no_contract():
     assert w3.eth.wait_for_transaction_receipt(fund).status == 1
 
     # The actual EVM contract is deployed by somebody OTHER than the backend.
-    group_registry = _deploy(w3, _artifact("GroupRegistry"), outsider.address)
+    group_registry = _deploy(
+        w3, _artifact("GroupRegistry"), outsider.address, private_key=outsider.key
+    )
     base_cfg = BlockchainConfig(
         rpc_url=GANACHE_URL,
         chain_id=1337,
