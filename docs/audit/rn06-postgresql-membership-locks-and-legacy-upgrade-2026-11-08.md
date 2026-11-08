@@ -39,7 +39,24 @@ Regra de implementação: operações de filiação têm de passar pelos serviç
 - A existência de contribuição de ex-membro continua a bloquear o desembolso; nenhuma política financeira foi definida para esse dinheiro.
 - Ainda falta um snapshot imutável dos contribuintes obrigados no início do ciclo e regras de entrada/saída adoptadas pelo grupo.
 
-## 4. Migração real de registo histórico
+## 4. Inserções concorrentes de contribuições — regressão adicional
+
+Na suite PostgreSQL real, foram acrescentados dois testes contra a mesma linha bloqueada de `Group`:
+
+- `test_manual_contribution_cannot_be_inserted_during_group_snapshot`;
+- `test_simulated_wallet_contribution_cannot_be_inserted_during_group_snapshot`.
+
+Os testes invocam `ContributionService.register_manual_contribution()` e `ContributionService.register_mobile_wallet_contribution()` com transacções distintas. A chamada externa de `ContributionAnchorService` é isolada com Mock **apenas nestes dois testes de concorrência SQL**, pois o objectivo é provar bloqueio de escritas, não comportamento de rede. Os outros testes da workflow exercitam Ganache real.
+
+**Reprodução antes da correcção:** commit `117c2cf1dba4933b4aa6bcd8c1da996bcc543e6d`: **2 failed, 8 passed**. Ambos os registos conseguiam terminar apesar de a verificação RN06 manter o lock de grupo. Isso podia introduzir uma contribuição não presente no snapshot financeiro da proposta.
+
+**Correcção:** o serviço de contribuições agora obtém `Group.objects.select_for_update()` no início de cada operação transaccional, antes de ler configurações, validar membro ou inserir contribuição. Alinha a ordem de acesso com os serviços RN06.
+
+**Evidência pós-correcção:** commit `28bbcaef0f98739f4be78745afef4f5eed57833e`: **10/10 PostgreSQL/Ganache**, **148/148 Django**, workflow Brownie `success`. O teste de migração histórica também permaneceu verde.
+
+**Risco operacional introduzido/acentuado:** as rotinas de contribuições ainda executam `ContributionAnchorService().anchor()` dentro de `transaction.atomic`. Por isso, uma chamada RPC demorada mantém a linha `Group` bloqueada e pode atrasar outras operações de filiação e desembolso. Além disso, a ancoragem Ethereum e o commit PostgreSQL não são uma única transacção distribuída. A solução de produção requer fluxo em duas fases ou intent/outbox durável com reconciliação idempotente e telemetria. **Isto não foi implementado nesta correcção.**
+
+## 5. Migração real de registo histórico
 
 `integration_tests/probe_rn06_legacy_migration.py` opera **somente** no PostgreSQL CI descartável. Sequência:
 
@@ -53,12 +70,13 @@ Regra de implementação: operações de filiação têm de passar pelos serviç
 
 Não se convertem aprovações antigas sem prova em votos efectivos.
 
-## 5. Bloqueios remanescentes
+## 6. Bloqueios remanescentes
 
 - Definir política de participantes obrigados no início de cada ciclo e destino de fundos de ex-membros (issue #28).
 - Criar trilho transaccional/auditável de alteração de filiação e cobrir escritores que não usem `GroupService`, incluindo suspensão.
-- Ensaiar concorrência real de `complete()` versus alteração de contribuições em PostgreSQL, não apenas filiação; confirmar ordem de locks e evitar deadlocks.
+- Cobrir alterações de estado de contribuições (reversão/confirmar) por qualquer escritor e ensaiar `complete()` concorrente; confirmar a ordem de locks e ausência de deadlocks.
+- Remover chamadas RPC blockchain de dentro de transacções SQL longas, usando intent/outbox e reconciliação; medir espera no bloqueio de grupo.
 - Confirmar que a CI do frontend PR #1 corre contra o **head exacto** deste ramo, conforme gate de SHA.
 - Não apresentar `COMPLETED` como comprovativo de transferência bancária/e-Mola/M-Pesa.
 
-**Conclusão:** regressão de concorrência reproduzida e corrigida; migração do esquema antigo demonstrada como fail-closed. A política financeira de saída ainda não está resolvida e a issue #28 não deve ser fechada.
+**Conclusão:** regressões de concorrência de filiação e inserção de contribuições reproduzidas e corrigidas nos serviços testados; migração do esquema antigo demonstrada como fail-closed. A política financeira de saída ainda não está resolvida e a issue #28 não deve ser fechada.
