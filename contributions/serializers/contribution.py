@@ -34,7 +34,12 @@ class ContributionSerializer(serializers.ModelSerializer):
         # Old imported contributions have no verified intent. Do not imply
         # that an absent intent means an existing on-chain proof.
         from contributions.models import ContributionAnchorIntent
-        try:
-            return obj.anchor_intent.status
-        except ContributionAnchorIntent.DoesNotExist:
-            return "UNTRACKED_LEGACY"
+        # Do not trust the reverse OneToOne cache: it may still contain
+        # PENDING after the on_commit processor updated the intent in SQL.
+        status = (
+            ContributionAnchorIntent.objects
+            .filter(contribution_id=obj.pk)
+            .values_list("status", flat=True)
+            .first()
+        )
+        return status or "UNTRACKED_LEGACY"
