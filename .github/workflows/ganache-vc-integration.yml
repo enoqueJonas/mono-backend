@@ -47,11 +47,11 @@ jobs:
             --wallet.accounts="0x0000000000000000000000000000000000000000000000000000000000000001,100000000000000000000" \
             > /tmp/ganache-mono-audit.log 2>&1 &
           echo $! > /tmp/ganache-mono-audit.pid
-      - name: Run real Ganache contract and Django API lifecycle
+      - name: Run real Ganache VC and 3-registry operator custody scenarios
         env:
           BLOCKCHAIN_RPC_URL: http://127.0.0.1:8545
         run: |
-          python -m pytest integration_tests/test_vc_ganache.py -q -s --ds=config.settings_integration
+          python -m pytest integration_tests/test_vc_ganache.py integration_tests/test_registry_custody_ganache.py -q -s --ds=config.settings_integration
       - name: Show node diagnostics on failure
         if: failure()
         run: tail -n 80 /tmp/ganache-mono-audit.log || true
