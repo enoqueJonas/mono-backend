@@ -12,6 +12,7 @@ from blockchain.services.contribution_anchor_service import (
     ContributionAnchorHashMismatch,
 )
 from contributions.models import Contribution, ContributionAnchorIntent
+from contributions.serializers.contribution import ContributionSerializer
 from contributions.services.anchor_outbox_service import ContributionAnchorOutboxService
 from contributions.services.contribution_hash_service import ContributionHashService
 from contributions.services.contribution_service import (
@@ -97,6 +98,10 @@ class ContributionAnchorOutboxTests(TestCase):
         intent.refresh_from_db()
         self.assertEqual(intent.attempt_count, 1)
         self.assertEqual(intent.status, ContributionAnchorIntent.Status.CONFIRMED)
+        self.assertEqual(
+            ContributionSerializer(contribution).data["anchoring_status"],
+            ContributionAnchorIntent.Status.CONFIRMED,
+        )
 
     def test_failed_rpc_leaves_retryable_intent_without_rollback_of_contribution(self):
         contribution = self.queue()
