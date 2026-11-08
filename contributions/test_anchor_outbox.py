@@ -1,9 +1,11 @@
 """Durable contribution intent and retry tests (mocked RPC boundary only)."""
 from datetime import date
+from io import StringIO
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.core.management import call_command
 from django.test import TestCase
 
 from accounts.models import User
@@ -164,3 +166,22 @@ class ContributionAnchorOutboxTests(TestCase):
                 },
             )
         self.assertFalse(ContributionAnchorIntent.objects.exists())
+
+    def test_manual_recovery_command_processes_pending_intent(self):
+        contribution = self.queue()
+        output = StringIO()
+        with patch(
+            "contributions.management.commands.reconcile_contribution_anchors."
+            "ContributionAnchorOutboxService"
+        ) as worker:
+            worker.pending_ids.return_value = [contribution.anchor_intent.pk]
+            worker.process.return_value = ContributionAnchorIntent.Status.CONFIRMED
+            call_command(
+                "reconcile_contribution_anchors",
+                "--limit", "1",
+                stdout=output,
+            )
+            worker.pending_ids.assert_called_once_with(limit=1)
+            worker.process.assert_called_once_with(contribution.anchor_intent.pk)
+        self.assertIn("attempted=1", output.getvalue())
+        self.assertIn("confirmed=1", output.getvalue())
