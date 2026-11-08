@@ -25,7 +25,9 @@ from integration_tests.test_registry_custody_ganache import _artifact, _deploy, 
 @pytest.mark.django_db(transaction=True)
 def test_mined_contribution_recovers_after_sql_receipt_write_failure():
     assert connection.vendor == "postgresql"
-    assert settings.DATABASES["default"]["NAME"] == "mono_integration"
+    assert settings.DATABASES["default"]["NAME"] in {
+        "mono_integration", "test_mono_integration",
+    }
 
     w3 = _node()
     contract = _deploy(
