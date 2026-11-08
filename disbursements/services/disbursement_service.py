@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
-from contributions.models import Contribution
+from contributions.models import Contribution, ContributionAnchorIntent
 from core.exceptions import DomainException
 from disbursements.models import Disbursement, DisbursementApproval
 from groups.models import Group, GroupMember
@@ -157,6 +157,21 @@ class DisbursementService:
                 for _, amount, currency in confirmed
             )
         ):
+            raise IncompleteContributions()
+
+        # New contribution submissions have a durable anchoring intent.
+        # A "CONFIRMED" manual/simulated ledger row is not acceptable for a
+        # new RN06 disbursement until that intent is also reconciled with the
+        # recorded on-chain receipt. Historic rows without an intent are not
+        # silently assigned invented proof or backfilled during this change.
+        pending_anchor = ContributionAnchorIntent.objects.filter(
+            contribution__member__group=group,
+            contribution__group_settings=settings,
+            contribution__contribution_period=period,
+        ).exclude(
+            status=ContributionAnchorIntent.Status.CONFIRMED
+        ).exists()
+        if pending_anchor:
             raise IncompleteContributions()
 
         total = sum((amount for _, amount, _ in confirmed), Decimal("0.00"))
