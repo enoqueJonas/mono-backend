@@ -8,7 +8,9 @@ membership changes and the RN06 proposal/completion checks. Locking individual
 ACTIVE members alone is insufficient for new member rows (phantoms).
 """
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 from threading import Event
 
 import pytest
@@ -16,6 +18,7 @@ from django.db import connection, transaction
 from django.test import TransactionTestCase
 
 from accounts.models import User
+from contributions.services.contribution_service import ContributionService
 from groups.models import Group, GroupMember, GroupSettings
 from groups.services.group_service import GroupService
 
@@ -76,7 +79,7 @@ class RN06MembershipLockingTests(TransactionTestCase):
                 self.assertTrue(started.wait(timeout=5), "Worker failed to start")
                 self.assertFalse(
                     done.wait(timeout=0.6),
-                    "Membership operation completed while RN06 group lock was held",
+                    "Group-scoped write completed while RN06 group lock was held",
                 )
             return future.result(timeout=10)
 
@@ -114,3 +117,37 @@ class RN06MembershipLockingTests(TransactionTestCase):
         )
         self.assertEqual(member.pk, self.departing.pk)
         self.assertEqual(member.status, GroupMember.Status.ACTIVE)
+
+    def test_manual_contribution_cannot_be_inserted_during_group_snapshot(self):
+        # External anchoring is deliberately mocked: this test measures SQL
+        # transaction serialization, not Ganache availability.
+        with patch("contributions.services.contribution_service.ContributionAnchorService"):
+            contribution = self._must_wait_for_group_lock(
+                lambda: ContributionService.register_manual_contribution(
+                    group_id=self.group.pk,
+                    registered_by=self.manager,
+                    data={
+                        "group_member_id": self.departing.pk,
+                        "amount": Decimal("1000.00"),
+                        "contribution_period": date(2026, 11, 1),
+                    },
+                )
+            )
+        self.assertEqual(contribution.member_id, self.departing.pk)
+
+    def test_simulated_wallet_contribution_cannot_be_inserted_during_group_snapshot(self):
+        # The callback is a simulation; we only exercise its DB write path.
+        with patch("contributions.services.contribution_service.ContributionAnchorService"):
+            contribution = self._must_wait_for_group_lock(
+                lambda: ContributionService.register_mobile_wallet_contribution(
+                    data={
+                        "group_id": self.group.pk,
+                        "group_member_id": self.departing.pk,
+                        "amount": Decimal("1000.00"),
+                        "currency": "MZN",
+                        "contribution_period": date(2026, 11, 1),
+                        "reference": "RN06-RACE-SIMULATED-WALLET",
+                    }
+                )
+            )
+        self.assertEqual(contribution.member_id, self.departing.pk)
