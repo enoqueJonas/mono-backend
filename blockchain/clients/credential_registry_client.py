@@ -19,6 +19,7 @@ from blockchain.exceptions import (
     CredentialAlreadyRevoked,
 )
 from blockchain.mappers.blockchain_receipt_mapper import BlockchainReceiptMapper
+from blockchain.security.registry_operator import require_registry_operator
 from blockchain.services.transaction_service import (
     TransactionService,
 )
@@ -64,6 +65,12 @@ class CredentialRegistryClient:
         self.contract = self.web3.eth.contract(
             address=contract_address,
             abi=abi,
+        )
+
+        require_registry_operator(
+            web3=self.web3,
+            contract=self.contract,
+            config=self.config,
         )
 
         self.transaction_service = TransactionService(
