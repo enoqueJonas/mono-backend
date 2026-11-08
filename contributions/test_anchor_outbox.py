@@ -349,3 +349,46 @@ class ContributionAnchorOutboxTests(TestCase):
                 expected_hash=ContributionHashService.calculate(contribution),
             )
         client.register_contribution.assert_called_once()
+
+    def test_exhausted_retry_budget_goes_to_review_without_infinite_polling(self):
+        contribution = self.queue()
+        intent = contribution.anchor_intent
+        intent.attempt_count = ContributionAnchorOutboxService.MAX_ATTEMPTS - 1
+        intent.save(update_fields=["attempt_count"])
+        with patch(
+            "contributions.services.anchor_outbox_service.ContributionAnchorService"
+        ) as svc:
+            svc.return_value.anchor.side_effect = ConnectionError("test-only outage")
+            self.assertEqual(
+                ContributionAnchorOutboxService.process(intent.pk),
+                ContributionAnchorIntent.Status.REVIEW_REQUIRED,
+            )
+            svc.return_value.anchor.assert_called_once()
+        intent.refresh_from_db()
+        self.assertEqual(
+            intent.attempt_count, ContributionAnchorOutboxService.MAX_ATTEMPTS
+        )
+        self.assertIsNone(intent.next_attempt_at)
+        self.assertNotIn(
+            intent.pk, ContributionAnchorOutboxService.pending_ids(limit=100)
+        )
+
+    def test_health_gate_fails_on_review_without_broadcast(self):
+        contribution = self.queue()
+        intent = contribution.anchor_intent
+        intent.status = ContributionAnchorIntent.Status.REVIEW_REQUIRED
+        intent.save(update_fields=["status"])
+        output = StringIO()
+        with patch(
+            "contributions.management.commands.reconcile_contribution_anchors."
+            "ContributionAnchorOutboxService"
+        ) as worker:
+            with self.assertRaises(CommandError):
+                call_command(
+                    "reconcile_contribution_anchors",
+                    "--dry-run", "--fail-on-review",
+                    stdout=output,
+                )
+            worker.pending_ids.assert_not_called()
+            worker.process.assert_not_called()
+        self.assertIn("outstanding_review=1", output.getvalue())
