@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 class ContributionAnchorOutboxService:
     LEASE = timedelta(minutes=10)
+    MAX_ATTEMPTS = 6
 
     @staticmethod
     @contextmanager
@@ -153,6 +154,13 @@ class ContributionAnchorOutboxService:
                     pk=intent_id
                 )
                 if intent.claim_token == token:
+                    if (
+                        status == ContributionAnchorIntent.Status.PENDING
+                        and intent.attempt_count >= cls.MAX_ATTEMPTS
+                    ):
+                        # Exhausted bounded retries require operator review;
+                        # never spin forever against a failing provider.
+                        status = ContributionAnchorIntent.Status.REVIEW_REQUIRED
                     intent.status = status
                     intent.claim_token = None
                     intent.claimed_at = None
