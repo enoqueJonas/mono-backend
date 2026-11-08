@@ -6,7 +6,8 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from accounts.models import User
-from contributions.models import Contribution
+from contributions.models import Contribution, ContributionAnchorIntent
+from contributions.services.contribution_hash_service import ContributionHashService
 from disbursements.models import Disbursement, DisbursementApproval
 from disbursements.services.disbursement_service import (
     DisbursementService,
@@ -416,6 +417,35 @@ class IndependentDisbursementApprovalTests(TestCase):
             status=Contribution.Status.CONFIRMED,
             reference="RN06-EX-LATE-001",
         )
+        with self.assertRaises(IncompleteContributions):
+            DisbursementService.complete(
+                disbursement_id=disbursement.id, completed_by=self.manager
+            )
+        self.rotation.refresh_from_db()
+        self.assertEqual(self.rotation.status, RotationOrder.Status.CURRENT)
+
+    def test_new_unanchored_contribution_blocks_proposal_and_completion(self):
+        """An application-confirmed payment is not an anchored financial proof."""
+        payment = Contribution.objects.get(member=self.members[self.voter1.pk])
+        intent = ContributionAnchorIntent.objects.create(
+            contribution=payment,
+            content_hash=ContributionHashService.calculate(payment),
+        )
+        with self.assertRaises(IncompleteContributions):
+            self.propose()
+
+        intent.status = ContributionAnchorIntent.Status.CONFIRMED
+        intent.save(update_fields=["status", "updated_at"])
+        disbursement = self.propose()
+        for voter in (self.voter1, self.voter2):
+            DisbursementService.approve(
+                disbursement_id=disbursement.id, approved_by=voter
+            )
+
+        # If anchoring is marked unresolved, RN06 must not advance an
+        # already-voted proposal based only on the earlier SQL snapshot.
+        intent.status = ContributionAnchorIntent.Status.REVIEW_REQUIRED
+        intent.save(update_fields=["status", "updated_at"])
         with self.assertRaises(IncompleteContributions):
             DisbursementService.complete(
                 disbursement_id=disbursement.id, completed_by=self.manager
