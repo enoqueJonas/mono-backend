@@ -46,8 +46,8 @@ class MobileWalletContributionWebhookView(APIView):
                 contribution
             ).data,
             message=(
-                "Mobile wallet contribution "
-                "registered successfully."
+                "Simulated wallet contribution recorded. "
+                "Blockchain anchoring may be pending."
             ),
             status_code=201,
         )
