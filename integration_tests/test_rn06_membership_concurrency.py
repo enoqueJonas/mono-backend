@@ -8,6 +8,7 @@ membership changes and the RN06 proposal/completion checks. Locking individual
 ACTIVE members alone is insufficient for new member rows (phantoms).
 """
 from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 from datetime import date
 from decimal import Decimal
 from unittest.mock import patch
@@ -18,6 +19,7 @@ from django.db import connection, transaction
 from django.test import TransactionTestCase
 
 from accounts.models import User
+from blockchain.models import BlockchainAnchorStatus
 from contributions.services.contribution_service import ContributionService
 from groups.models import Group, GroupMember, GroupSettings
 from groups.services.group_service import GroupService
@@ -151,3 +153,63 @@ class RN06MembershipLockingTests(TransactionTestCase):
                 )
             )
         self.assertEqual(contribution.member_id, self.departing.pk)
+
+    def test_slow_postcommit_rpc_does_not_keep_group_lock(self):
+        """A network wait must not block membership joins after SQL commit."""
+        rpc_started, release_rpc = Event(), Event()
+
+        def slow_anchor(*args, **kwargs):
+            from django.db import connection as worker_connection
+            assert not worker_connection.in_atomic_block
+            rpc_started.set()
+            if not release_rpc.wait(timeout=8):
+                raise RuntimeError("Synthetic RPC pause expired")
+            return SimpleNamespace(status=BlockchainAnchorStatus.CONFIRMED)
+
+        def register():
+            from django.db import close_old_connections
+            close_old_connections()
+            try:
+                return ContributionService.register_manual_contribution(
+                    group_id=self.group.pk,
+                    registered_by=self.manager,
+                    data={
+                        "group_member_id": self.departing.pk,
+                        "amount": Decimal("1000.00"),
+                        "contribution_period": date(2026, 11, 1),
+                    },
+                )
+            finally:
+                close_old_connections()
+
+        def join():
+            from django.db import close_old_connections
+            close_old_connections()
+            try:
+                return GroupService.add_member(
+                    group_id=self.group.pk, added_by=self.manager,
+                    phone_number=self.new_user.phone_number,
+                )
+            finally:
+                close_old_connections()
+
+        with patch(
+            "contributions.services.anchor_outbox_service.ContributionAnchorService"
+        ) as service:
+            service.return_value.anchor.side_effect = slow_anchor
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                register_future = pool.submit(register)
+                try:
+                    self.assertTrue(
+                        rpc_started.wait(timeout=5),
+                        "Post-commit simulated RPC was never reached",
+                    )
+                    join_future = pool.submit(join)
+                    member = join_future.result(timeout=3)
+                    self.assertEqual(member.user_id, self.new_user.pk)
+                    self.assertFalse(register_future.done())
+                finally:
+                    release_rpc.set()
+                registered = register_future.result(timeout=8)
+
+        self.assertEqual(registered.member_id, self.departing.pk)
