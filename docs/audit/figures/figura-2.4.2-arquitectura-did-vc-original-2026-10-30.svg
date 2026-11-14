@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1568" height="1000" viewBox="0 0 1568 1000">
+<rect width="1568" height="1000" fill="#fff"/>
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10Z" fill="#267999"/></marker></defs>
+<style>text{font-family:DejaVu Sans,sans-serif;fill:#203449}.role{font-size:42px;font-weight:700}.desc{font-size:31px}.lbl{font-size:30px;font-weight:600;fill:#256789}.registry{font-size:34px;font-weight:700}.regdesc{font-size:29px}.fine{font-size:26px;fill:#586B7C}</style>
+<rect x="32" y="94" width="449" height="465" rx="25" fill="#EDF5F9" stroke="#7197AC" stroke-width="3"/>
+<rect x="560" y="94" width="449" height="465" rx="25" fill="#F0F7F2" stroke="#79A18D" stroke-width="3"/>
+<rect x="1087" y="94" width="449" height="465" rx="25" fill="#F3F4FA" stroke="#8D95B0" stroke-width="3"/>
+<text x="256" y="182" class="role" text-anchor="middle">EMISSOR</text><text x="256" y="269" class="desc" text-anchor="middle">Emite credencial</text><text x="256" y="320" class="desc" text-anchor="middle">e assina</text><text x="256" y="371" class="desc" text-anchor="middle">digitalmente</text>
+<text x="784" y="182" class="role" text-anchor="middle">TITULAR</text><text x="784" y="269" class="desc" text-anchor="middle">Recebe a credencial</text><text x="784" y="320" class="desc" text-anchor="middle">e pode apresentá-la</text><text x="784" y="371" class="desc" text-anchor="middle">a terceiros</text>
+<text x="1311" y="182" class="role" text-anchor="middle">VERIFICADOR</text><text x="1311" y="269" class="desc" text-anchor="middle">Confere assinatura,</text><text x="1311" y="320" class="desc" text-anchor="middle">emissor e estado</text><text x="1311" y="371" class="desc" text-anchor="middle">da credencial</text>
+<path d="M487 307 H551" stroke="#267999" stroke-width="5" fill="none" marker-end="url(#ar)"/><path d="M1016 307 H1078" stroke="#267999" stroke-width="5" fill="none" marker-end="url(#ar)"/>
+<text x="520" y="270" class="lbl" text-anchor="middle">VC</text><text x="1048" y="270" class="lbl" text-anchor="middle">VC</text>
+<text x="520" y="613" class="fine" text-anchor="middle">Emissão</text><text x="1048" y="613" class="fine" text-anchor="middle">Apresentação</text>
+<rect x="86" y="689" width="1396" height="211" rx="20" fill="#F4F7FA" stroke="#98A9B7" stroke-width="3"/>
+<text x="784" y="756" class="registry" text-anchor="middle">REGISTO DE CONFIANÇA — SE APLICÁVEL</text>
+<text x="784" y="816" class="regdesc" text-anchor="middle">Material de verificação, identificadores ou estado de credenciais</text>
+<text x="784" y="863" class="fine" text-anchor="middle">A blockchain depende do método DID e da arquitectura escolhida.</text>
+<path d="M247 567 V679" stroke="#7899AB" stroke-width="4" stroke-dasharray="13 10" fill="none" marker-end="url(#ar)"/><path d="M1309 567 V679" stroke="#7899AB" stroke-width="4" stroke-dasharray="13 10" fill="none" marker-end="url(#ar)"/>
+</svg>

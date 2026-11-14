@@ -102,3 +102,23 @@ def test_active_manager_can_revoke(case):
     assert response.status_code == 200, response.data
     credential.refresh_from_db()
     assert credential.status == VerifiableCredential.Status.REVOKED
+
+
+@pytest.mark.django_db
+def test_pending_credential_cannot_be_revoked_before_reconciliation(case):
+    manager, other, holder, credential = case
+    credential.status = VerifiableCredential.Status.PENDING
+    credential.save(update_fields=["status"])
+    client = APIClient()
+    client.force_authenticate(user=manager)
+    with patch(
+        "credentials.application.services.revoke_credential_service.AnchorService"
+    ) as blockchain:
+        response = client.post(
+            f"/api/v1/credentials/{credential.id}/revoke/",
+            {"reason": "not yet issued"}, format="json",
+        )
+        assert response.status_code == 400
+        blockchain.assert_not_called()
+    credential.refresh_from_db()
+    assert credential.status == VerifiableCredential.Status.PENDING

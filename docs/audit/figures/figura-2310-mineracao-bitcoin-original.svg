@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 742" width="1200" height="742">
+<rect width="1200" height="742" fill="white"/>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10Z" fill="#315B73"/></marker></defs>
+<style>
+text{font-family:DejaVu Sans,Arial,sans-serif;fill:#1C3345}.name{font-size:26px;font-weight:bold}.body{font-size:21px}.no{font-size:24px;font-weight:bold;fill:white}.foot{font-size:19px;fill:#435D70}
+</style>
+<rect x="15" y="25" width="368" height="241" rx="15" fill="#F0F6FA" stroke="#63879A" stroke-width="2.5"/>
+<rect x="417" y="25" width="368" height="241" rx="15" fill="#F0F6FA" stroke="#63879A" stroke-width="2.5"/>
+<rect x="819" y="25" width="368" height="241" rx="15" fill="#F0F6FA" stroke="#63879A" stroke-width="2.5"/>
+<rect x="819" y="340" width="368" height="241" rx="15" fill="#F0F6FA" stroke="#63879A" stroke-width="2.5"/>
+<rect x="417" y="340" width="368" height="241" rx="15" fill="#F0F6FA" stroke="#63879A" stroke-width="2.5"/>
+<rect x="15" y="340" width="368" height="241" rx="15" fill="#F0F6FA" stroke="#63879A" stroke-width="2.5"/>
+<g>
+<circle cx="47" cy="58" r="23" fill="#315B73"/><text x="47" y="66" text-anchor="middle" class="no">1</text>
+<text x="201" y="96" class="name" text-anchor="middle">Transacções</text><text x="201" y="140" class="body" text-anchor="middle">Os nós verificam</text><text x="201" y="173" class="body" text-anchor="middle">regras e assinaturas</text>
+<circle cx="449" cy="58" r="23" fill="#315B73"/><text x="449" y="66" text-anchor="middle" class="no">2</text>
+<text x="601" y="96" class="name" text-anchor="middle">Bloco candidato</text><text x="601" y="140" class="body" text-anchor="middle">Minerador selecciona</text><text x="601" y="173" class="body" text-anchor="middle">transacções elegíveis</text>
+<circle cx="851" cy="58" r="23" fill="#315B73"/><text x="851" y="66" text-anchor="middle" class="no">3</text>
+<text x="1002" y="96" class="name" text-anchor="middle">Prova de trabalho</text><text x="1002" y="140" class="body" text-anchor="middle">Procura um hash</text><text x="1002" y="173" class="body" text-anchor="middle">abaixo do alvo</text>
+<circle cx="851" cy="373" r="23" fill="#315B73"/><text x="851" y="381" text-anchor="middle" class="no">4</text>
+<text x="1002" y="412" class="name" text-anchor="middle">Propagação</text><text x="1002" y="456" class="body" text-anchor="middle">O bloco proposto</text><text x="1002" y="489" class="body" text-anchor="middle">é difundido na rede</text>
+<circle cx="449" cy="373" r="23" fill="#315B73"/><text x="449" y="381" text-anchor="middle" class="no">5</text>
+<text x="601" y="412" class="name" text-anchor="middle">Validação por nós</text><text x="601" y="456" class="body" text-anchor="middle">Verificam PoW,</text><text x="601" y="489" class="body" text-anchor="middle">bloco e transacções</text>
+<circle cx="47" cy="373" r="23" fill="#315B73"/><text x="47" y="381" text-anchor="middle" class="no">6</text>
+<text x="201" y="412" class="name" text-anchor="middle">Extensão da cadeia</text><text x="201" y="456" class="body" text-anchor="middle">Integra a cadeia de</text><text x="201" y="489" class="body" text-anchor="middle">maior trabalho acumulado</text>
+</g>
+<g stroke="#315B73" stroke-width="4.8" fill="none" marker-end="url(#arrow)">
+<path d="M389 145 H409"/><path d="M791 145 H811"/><path d="M1002 276 V329"/>
+<path d="M813 461 H791"/><path d="M410 461 H389"/>
+</g>
+<rect x="14" y="615" width="1172" height="95" rx="12" fill="#F6F8FA" stroke="#CED9DF" stroke-width="2"/>
+<text x="600" y="651" text-anchor="middle" class="foot">A aceitação depende das regras do protocolo e não garante irreversibilidade absoluta.</text>
+<text x="600" y="682" text-anchor="middle" class="foot">Podem ocorrer bifurcações e reorganizações da cadeia.</text>
+</svg>

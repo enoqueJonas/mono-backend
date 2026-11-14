@@ -45,6 +45,7 @@ class DjangoCredentialRepository(
                 + timedelta(days=self.DEFAULT_VALIDITY_DAYS)
             ),
             credential_document=document.to_dict(),
+            status=VerifiableCredential.Status.PENDING,
             credential_hash=credential_hash.value,
         )
 

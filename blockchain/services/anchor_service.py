@@ -79,3 +79,9 @@ class AnchorService:
             credential_hash.value
 
         )
+
+    def recover_anchoring_receipt(
+        self,
+        credential_hash: CredentialHash,
+    ) -> BlockchainReceipt:
+        return self.client.recover_anchoring_receipt(credential_hash.value)

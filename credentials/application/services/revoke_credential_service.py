@@ -41,6 +41,10 @@ class RevokeCredentialService:
             raise PermissionDenied(
                 "Only an active manager of the credential's group may revoke it."
             )
+        if credential.status == VerifiableCredential.Status.PENDING:
+            raise ValidationError(
+                "Credential issuance is still pending blockchain reconciliation."
+            )
         if credential.status == VerifiableCredential.Status.REVOKED:
             raise ValidationError("Credential is already revoked.")
 
