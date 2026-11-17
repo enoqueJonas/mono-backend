@@ -12,10 +12,9 @@ from blockchain.services.transaction_service import TransactionService
 
 
 class DisbursementRegistryClient:
-    """Client for two distinct proofs: approved proposal and verified payout receipt.
+    """Client for internal authorization and distinctly labelled payment evidence.
 
-    This client CANNOT verify a mobile-money payment and must never be called
-    with an unverified provider response.
+    Beneficiary acknowledgment does NOT establish provider financial settlement.
     """
 
     def __init__(self, config=None):
@@ -100,5 +99,32 @@ class DisbursementRegistryClient:
             self.contract.functions.recordSettlement(
                 self._id_bytes32(disbursement_id),
                 self._hash_bytes32(settlement_hash),
+            )
+        )
+
+    def get_beneficiary_acknowledgment(self, disbursement_id: str) -> dict:
+        evidence_hash, acknowledged_at, exists = (
+            self.contract.functions.getBeneficiaryAcknowledgment(
+                self._id_bytes32(disbursement_id)
+            ).call()
+        )
+        return {
+            "evidence_hash": bytes(evidence_hash).hex(),
+            "acknowledged_at": int(acknowledged_at),
+            "exists": bool(exists),
+        }
+
+    def anchor_beneficiary_acknowledgment(
+        self, *, disbursement_id: str, evidence_hash: str
+    ) -> BlockchainReceipt:
+        """Record an app user acknowledgment, NOT bank/provider settlement."""
+        if not self.get(disbursement_id)["authorized"]:
+            raise ValueError("Authorization must be anchored before acknowledgment.")
+        if self.get_beneficiary_acknowledgment(disbursement_id)["exists"]:
+            raise ValueError("Acknowledgment already anchored; reconcile the receipt.")
+        return self.transactions.execute(
+            self.contract.functions.recordBeneficiaryAcknowledgment(
+                self._id_bytes32(disbursement_id),
+                self._hash_bytes32(evidence_hash),
             )
         )
