@@ -15,6 +15,12 @@ from disbursements.selectors.disbursement_selector import (
 from disbursements.services.disbursement_service import (
     DisbursementService,
 )
+from disbursements.models import ExternalWalletCustody
+from disbursements.serializers.external_payment import (
+    DesignateCustodianSerializer, ReportExternalPaymentSerializer,
+    DisputeExternalPaymentSerializer,
+)
+from disbursements.services.external_wallet_service import ExternalWalletService
 from groups.services.group_member_service import (
     GroupMemberService,
 )
@@ -172,3 +178,102 @@ class GroupDisbursementCompleteView(APIView):
                 "Desembolso concluído com sucesso."
             ),
         )
+
+
+class GroupExternalWalletCustodyView(APIView):
+    """Group custody is explicit; it is not a payment authorization to Mono."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, group_id):
+        ExternalWalletService.require_enabled()
+        GroupMemberService.ensure_active_member(group_id=group_id, user=request.user)
+        custody = ExternalWalletCustody.objects.filter(group_id=group_id).first()
+        if custody is None:
+            return success(data=None)
+        return success(data={
+            "custodian": str(custody.custodian_id),
+            "provider": custody.provider,
+            "wallet_number": custody.wallet_number,
+            "verification_level": "SELF_DECLARED_NOT_PROVIDER_VERIFIED",
+        })
+
+    def post(self, request, group_id):
+        serializer = DesignateCustodianSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        custody = ExternalWalletService.designate_custodian(
+            group_id=group_id,
+            designated_by=request.user,
+            member_id=serializer.validated_data["member_id"],
+            provider=serializer.validated_data["provider"],
+            wallet_number=serializer.validated_data["wallet_number"],
+        )
+        return success(data={
+            "custodian": str(custody.custodian_id),
+            "provider": custody.provider,
+            "wallet_number": custody.wallet_number,
+            "verification_level": "SELF_DECLARED_NOT_PROVIDER_VERIFIED",
+        }, message="Responsável pela carteira externa designado.")
+
+
+class GroupExternalPaymentReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, group_id, disbursement_id):
+        disbursement = DisbursementSelector.get_group_disbursement(
+            group_id=group_id, disbursement_id=disbursement_id
+        )
+        if disbursement is None:
+            raise DomainException("Desembolso não encontrado.")
+        serializer = ReportExternalPaymentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        report = ExternalWalletService.report_payment(
+            disbursement_id=disbursement.pk,
+            reported_by=request.user,
+            **serializer.validated_data,
+        )
+        return success(data={
+            "reference": report.reference,
+            "provider": report.provider,
+            "status": report.status,
+            "verification_level": "UNVERIFIED_CLAIM",
+        }, message="Transferência externa declarada; aguarda confirmação do beneficiário.")
+
+
+class GroupExternalPaymentConfirmView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, group_id, disbursement_id):
+        disbursement = DisbursementSelector.get_group_disbursement(
+            group_id=group_id, disbursement_id=disbursement_id
+        )
+        if disbursement is None:
+            raise DomainException("Desembolso não encontrado.")
+        outcome = ExternalWalletService.confirm_receipt(
+            disbursement_id=disbursement.pk,
+            confirmed_by=request.user,
+        )
+        return success(
+            data=DisbursementSerializer(outcome).data,
+            message="Recepção declarada pelo beneficiário; sem verificação independente do operador.",
+        )
+
+
+class GroupExternalPaymentDisputeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, group_id, disbursement_id):
+        disbursement = DisbursementSelector.get_group_disbursement(
+            group_id=group_id, disbursement_id=disbursement_id
+        )
+        if disbursement is None:
+            raise DomainException("Desembolso não encontrado.")
+        serializer = DisputeExternalPaymentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        report = ExternalWalletService.dispute_receipt(
+            disbursement_id=disbursement.pk,
+            disputed_by=request.user,
+            reason=serializer.validated_data["reason"],
+        )
+        return success(data={"status": report.status}, message=(
+            "Divergência registada. A rotação permanece bloqueada até resolução."
+        ))
