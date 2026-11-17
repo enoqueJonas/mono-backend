@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from django.conf import settings
+from django.conf import settings as django_settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -227,7 +227,7 @@ class DisbursementService:
         # Freeze the external wallet custodian and the reported source account
         # when RN06 is enabled, so a later group change cannot redirect payout.
         custody_snapshot = {}
-        if getattr(settings, "NONCUSTODIAL_WALLET_FLOW_ENABLED", False):
+        if getattr(django_settings, "NONCUSTODIAL_WALLET_FLOW_ENABLED", False):
             custody = ExternalWalletCustody.objects.select_related("custodian").filter(
                 group=group
             ).first()
