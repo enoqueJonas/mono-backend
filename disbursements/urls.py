@@ -10,6 +10,11 @@ from disbursements.views import (
     GroupDisbursementDetailView,
 
     GroupDisbursementListCreateView,
+    GroupTreasuryMandateView,
+    ExternalDisbursementOpenView,
+    ExternalDisbursementReportView,
+    ExternalDisbursementAcknowledgeView,
+    ExternalDisbursementFinalizeView,
 
 )
 
@@ -50,5 +55,33 @@ urlpatterns += [
         "groups/<uuid:group_id>/disbursements/<uuid:disbursement_id>/sandbox-execute/",
         GroupSandboxDisbursementExecuteView.as_view(),
         name="group-disbursement-sandbox-execute",
+    ),
+]
+
+urlpatterns += [
+    path(
+        "groups/<uuid:group_id>/treasury-mandate/",
+        GroupTreasuryMandateView.as_view(),
+        name="group-treasury-mandate",
+    ),
+    path(
+        "groups/<uuid:group_id>/disbursements/<uuid:disbursement_id>/open-external/",
+        ExternalDisbursementOpenView.as_view(),
+        name="group-disbursement-open-external",
+    ),
+    path(
+        "groups/<uuid:group_id>/disbursements/<uuid:disbursement_id>/report-external/",
+        ExternalDisbursementReportView.as_view(),
+        name="group-disbursement-report-external",
+    ),
+    path(
+        "groups/<uuid:group_id>/disbursements/<uuid:disbursement_id>/acknowledge-external/",
+        ExternalDisbursementAcknowledgeView.as_view(),
+        name="group-disbursement-acknowledge-external",
+    ),
+    path(
+        "groups/<uuid:group_id>/disbursements/<uuid:disbursement_id>/finalize-external/",
+        ExternalDisbursementFinalizeView.as_view(),
+        name="group-disbursement-finalize-external",
     ),
 ]
