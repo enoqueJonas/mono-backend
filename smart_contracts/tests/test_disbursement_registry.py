@@ -62,3 +62,30 @@ def test_rejects_empty_ids_and_hashes(registry, accounts):
     registry.recordAuthorization(_b32(1), _b32(2), {"from": accounts[0]})
     with reverts("Invalid settlement hash"):
         registry.recordSettlement(_b32(1), _b32(0), {"from": accounts[0]})
+
+
+def test_beneficiary_acknowledgment_is_not_settlement(registry, accounts):
+    d, approved_hash, claim_hash = _b32(101), _b32(202), _b32(303)
+    with reverts("Authorization not recorded"):
+        registry.recordBeneficiaryAcknowledgment(d, claim_hash, {"from": accounts[0]})
+
+    registry.recordAuthorization(d, approved_hash, {"from": accounts[0]})
+    with reverts("Only authorized operator"):
+        registry.recordBeneficiaryAcknowledgment(d, claim_hash, {"from": accounts[1]})
+    with reverts("Invalid acknowledgment hash"):
+        registry.recordBeneficiaryAcknowledgment(d, _b32(0), {"from": accounts[0]})
+
+    registry.recordBeneficiaryAcknowledgment(d, claim_hash, {"from": accounts[0]})
+    saved_hash, anchored_at, exists = registry.getBeneficiaryAcknowledgment(d)
+    assert exists is True
+    assert anchored_at > 0
+    assert bytes(saved_hash) == claim_hash
+
+    # The claim must NEVER be conflated with an actual paid/settled state.
+    auth, settlement, _approved_at, _settled_at, authorized, settled = registry.getDisbursement(d)
+    assert authorized is True
+    assert settled is False
+    assert bytes(settlement) == _b32(0)
+
+    with reverts("Acknowledgment already recorded"):
+        registry.recordBeneficiaryAcknowledgment(d, _b32(999), {"from": accounts[0]})
