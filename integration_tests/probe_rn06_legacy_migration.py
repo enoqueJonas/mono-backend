@@ -85,6 +85,10 @@ legacy_id = legacy.pk
 
 # Upgrade the actual SQL schema and inspect the row via current application.
 call_command("migrate", "disbursements", "0002_independent_approvals", interactive=False, verbosity=0)
+# The running Django model contains fields introduced after 0002.
+# Apply subsequent additive migrations before querying with the CURRENT model,
+# while retaining the original pre-RN06 row and its historical data.
+call_command("migrate", "disbursements", interactive=False, verbosity=0)
 
 from disbursements.models import Disbursement
 from disbursements.services.disbursement_service import (
@@ -98,6 +102,8 @@ assert upgraded.proposed_by_id is None
 assert upgraded.eligible_approver_ids == []
 assert upgraded.required_approvals >= 2
 assert upgraded.amount == Decimal("2000.00")
+assert upgraded.custodian_at_proposal_id is None
+assert upgraded.custody_provider_at_proposal == ""
 
 try:
     DisbursementService.complete(
@@ -113,4 +119,4 @@ upgraded.refresh_from_db()
 rotation.refresh_from_db()
 assert upgraded.status == Disbursement.Status.APPROVED
 assert rotation.status == RotationOrder.Status.CURRENT
-print("RN06_LEGACY_UPGRADE_OK PostgreSQL schema=0001->0002 old_approved_record_untrusted=True rotation_not_advanced=True")
+print("RN06_LEGACY_UPGRADE_OK PostgreSQL schema=0001->0002->latest old_approved_record_untrusted=True rotation_not_advanced=True")
