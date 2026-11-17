@@ -15,6 +15,7 @@ from disbursements.selectors.disbursement_selector import (
 from disbursements.services.disbursement_service import (
     DisbursementService,
 )
+from disbursements.services.sandbox_payout_service import SandboxPayoutService
 from groups.services.group_member_service import (
     GroupMemberService,
 )
@@ -171,4 +172,25 @@ class GroupDisbursementCompleteView(APIView):
             message=(
                 "Desembolso concluído com sucesso."
             ),
+        )
+
+
+class GroupSandboxDisbursementExecuteView(APIView):
+    """Runs a fully FICTITIOUS payout with blockchain proofs; never real money."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, group_id, disbursement_id):
+        GroupService.ensure_manager(group_id=group_id, user=request.user)
+        disbursement = DisbursementSelector.get_group_disbursement(
+            group_id=group_id, disbursement_id=disbursement_id
+        )
+        if disbursement is None:
+            raise DomainException("Desembolso não encontrado.")
+        result = SandboxPayoutService.execute(
+            disbursement_id=disbursement.pk,
+            completed_by=request.user,
+        )
+        return success(
+            data=DisbursementSerializer(result).data,
+            message="Desembolso fictício validado na sandbox e ancorado no Ganache; não houve transferência real.",
         )
