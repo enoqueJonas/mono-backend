@@ -1,6 +1,8 @@
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from disbursements.serializers.complete_disbursement import CompleteDisbursementSerializer
+
 from core.exceptions import DomainException
 from core.responses import success
 from disbursements.serializers.create_disbursement import (
@@ -159,9 +161,12 @@ class GroupDisbursementCompleteView(APIView):
                 "Desembolso não encontrado."
             )
 
+        serializer = CompleteDisbursementSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         completed = DisbursementService.complete(
             disbursement_id=disbursement.id,
             completed_by=request.user,
+            transfer_reference=serializer.validated_data["transfer_reference"],
         )
 
         return success(
@@ -169,6 +174,7 @@ class GroupDisbursementCompleteView(APIView):
                 completed
             ).data,
             message=(
-                "Desembolso concluído com sucesso."
+                "Conclusão administrativa registada com referência declarada. "
+                "Esta operação não comprova liquidação financeira externa."
             ),
         )
