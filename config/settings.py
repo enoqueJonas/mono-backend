@@ -182,3 +182,6 @@ MOBILE_WALLET_WEBHOOK_SECRET = env("MOBILE_WALLET_WEBHOOK_SECRET", default="")
 
 # Internal virtual-money laboratory; no external financial settlement.
 SANDBOX_PAYMENTS_ENABLED = env.bool("SANDBOX_PAYMENTS_ENABLED", default=False)
+
+# Only when explicitly enabled; disables legacy administrative completion and auto-pay.
+NON_CUSTODIAL_DISBURSEMENTS_ENABLED = env.bool("NON_CUSTODIAL_DISBURSEMENTS_ENABLED", default=False)
