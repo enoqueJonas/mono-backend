@@ -320,7 +320,7 @@ class DisbursementService:
     @staticmethod
     @transaction.atomic
     def complete(*, disbursement_id, completed_by) -> Disbursement:
-        if getattr(settings, "NONCUSTODIAL_WALLET_FLOW_ENABLED", False):
+        if getattr(django_settings, "NONCUSTODIAL_WALLET_FLOW_ENABLED", False):
             raise InvalidDisbursementStatus(
                 "A conclusão exige declaração do responsável e confirmação do beneficiário."
             )
