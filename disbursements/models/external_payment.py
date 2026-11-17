@@ -43,6 +43,7 @@ class ExternalPaymentReport(models.Model):
     )
     provider = models.CharField(max_length=20)
     reference = models.CharField(max_length=120)
+    recipient_wallet_number = models.CharField(max_length=32)
     reported_by = models.ForeignKey(
         "accounts.User", on_delete=models.PROTECT,
         related_name="reported_external_payments"
