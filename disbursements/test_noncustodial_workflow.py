@@ -259,7 +259,9 @@ class ExternalDisbursementWorkflowTests(TestCase):
         before = Service.authorization_hash(d)
         mandate.wallet_alias = "M-Pesa ***9999"
         mandate.save(update_fields=["wallet_alias"])
-        self.assertNotEqual(Service.authorization_hash(d), before)
+        # Re-read DB state instead of the cached group.treasury_mandate relation.
+        fresh = Disbursement.objects.get(pk=d.pk)
+        self.assertNotEqual(Service.authorization_hash(fresh), before)
         with self.assertRaises(ExternalEvidenceMismatch):
             self.open(d)
 
