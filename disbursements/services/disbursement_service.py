@@ -301,6 +301,11 @@ class DisbursementService:
                 "Neste ambiente, a conclusão exige pagamento fictício confirmado "
                 "e prova blockchain; utilize a operação sandbox-execute."
             )
+        if not getattr(settings, "ALLOW_LEGACY_ADMINISTRATIVE_COMPLETION", False):
+            raise InvalidDisbursementStatus(
+                "A conclusão administrativa directa está desactivada. "
+                "Utilize o fluxo de confirmação externa ou o laboratório de testes."
+            )
         disbursement = (
             Disbursement.objects
             .select_for_update()
