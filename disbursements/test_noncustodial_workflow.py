@@ -97,6 +97,11 @@ class ExternalDisbursementWorkflowTests(TestCase):
         self.chain = FakeEvidenceChain()
 
     def prepared(self):
+        Service.appoint_custodian(
+            group_id=self.group.pk, appointed_by=self.manager,
+            group_member_id=self.members[self.treasurer.pk].pk,
+            provider=TreasuryMandate.Provider.MPESA, wallet_alias="M-Pesa ***1234",
+        )
         d = DisbursementService.create(
             group_id=self.group.pk, cycle_number=1, created_by=self.manager
         )
@@ -104,11 +109,6 @@ class ExternalDisbursementWorkflowTests(TestCase):
         DisbursementService.approve(disbursement_id=d.pk, approved_by=self.voter2)
         d.refresh_from_db()
         self.assertEqual(d.status, Disbursement.Status.APPROVED)
-        Service.appoint_custodian(
-            group_id=self.group.pk, appointed_by=self.manager,
-            group_member_id=self.members[self.treasurer.pk].pk,
-            provider=TreasuryMandate.Provider.MPESA, wallet_alias="M-Pesa ***1234",
-        )
         return d
 
     def open(self, d):
@@ -222,22 +222,25 @@ class ExternalDisbursementWorkflowTests(TestCase):
         self.assertEqual(self.chain.ack_count, 1)
 
 
-    def test_custodian_cannot_self_confirm_their_own_turn(self):
-        d = DisbursementService.create(
-            group_id=self.group.pk, cycle_number=1, created_by=self.manager,
-        )
-        DisbursementService.approve(disbursement_id=d.pk, approved_by=self.treasurer)
-        DisbursementService.approve(disbursement_id=d.pk, approved_by=self.voter2)
+    def test_custodian_beneficiary_conflict_is_blocked_before_vote(self):
         Service.appoint_custodian(
             group_id=self.group.pk, appointed_by=self.manager,
             group_member_id=self.members[self.beneficiary.pk].pk,
             provider=TreasuryMandate.Provider.MPESA, wallet_alias="M-Pesa ***1234",
         )
-        with self.assertRaises(InvalidCustodian):
-            self.open(d)
-        d.refresh_from_db()
-        self.assertEqual(d.status, Disbursement.Status.APPROVED)
+        with self.assertRaises(InvalidDisbursementStatus):
+            DisbursementService.create(
+                group_id=self.group.pk, cycle_number=1, created_by=self.manager,
+            )
+        self.assertFalse(Disbursement.objects.filter(group=self.group).exists())
         self.assertEqual(self.chain.authorization_count, 0)
+
+    def test_custodian_must_be_known_before_voting(self):
+        with self.assertRaises(InvalidDisbursementStatus):
+            DisbursementService.create(
+                group_id=self.group.pk, cycle_number=1, created_by=self.manager,
+            )
+        self.assertFalse(Disbursement.objects.filter(group=self.group).exists())
 
     def test_archived_group_blocks_late_confirmation_and_completion(self):
         d = self.prepared()
