@@ -1,6 +1,8 @@
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import transaction
+from wallets.services.sandbox_ledger import SandboxLedgerService
 from django.utils import timezone
 
 from blockchain.services.contribution_anchor_service import ContributionAnchorService
@@ -160,6 +162,11 @@ class ContributionService:
             source=Contribution.Source.MOBILE_WALLET,
             status=Contribution.Status.CONFIRMED,
         )
+
+        # The authenticated *simulated* wallet callback mints test credits.
+        # A manual contribution does not prove a sandbox wallet deposit.
+        if getattr(settings, "SANDBOX_PAYMENTS_ENABLED", False):
+            SandboxLedgerService.record_contribution(contribution)
 
         ContributionService._enqueue_anchor(contribution)
         return contribution
