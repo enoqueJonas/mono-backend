@@ -27,6 +27,15 @@ class MpesaGateway:
         parsed = urlsplit(self.url)
         if parsed.scheme != "https" or parsed.hostname not in self.ALLOWED_HOSTS or parsed.port not in (None, 443):
             raise MpesaConfigurationError("M-Pesa host must be an approved HTTPS host.")
+        # The prototype has no independently verified C2B custody ledger.
+        # A production B2C transfer could spend pooled funds based on fake
+        # manually confirmed contributions. Fail closed until that boundary
+        # is built, audited and permitted by the licensed operator.
+        if parsed.hostname != "api.sandbox.vm.co.mz":
+            raise MpesaConfigurationError(
+                "Production B2C blocked: independent incoming-funds verification "
+                "and regulated group custody are not implemented."
+            )
         self.api_key = getattr(settings, "MPESA_B2C_API_KEY", "")
         self.public_key = getattr(settings, "MPESA_B2C_PUBLIC_KEY", "")
         self.service_code = getattr(settings, "MPESA_B2C_SERVICE_PROVIDER_CODE", "")
