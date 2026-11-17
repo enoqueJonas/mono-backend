@@ -81,6 +81,23 @@ class Migration(migrations.Migration):
                 name="unique_external_provider_reference",
             ),
         ),
+        migrations.AlterField(
+            model_name="disbursement", name="status",
+            field=models.CharField(
+                max_length=30, default="PENDING",
+                choices=[
+                    ("PENDING", "Pending"),
+                    ("AWAITING_CONSENSUS", "Awaiting consensus"),
+                    ("APPROVED", "Approved"),
+                    ("PROCESSING", "Processing"),
+                    ("PAYMENT_REPORTED", "External payment reported"),
+                    ("DISPUTED", "Payment disputed"),
+                    ("COMPLETED", "Completed"),
+                    ("FAILED", "Failed"),
+                    ("CANCELLED", "Cancelled"),
+                ],
+            ),
+        ),
         migrations.AddField(
             model_name="disbursement", name="custodian_at_proposal",
             field=models.ForeignKey(
