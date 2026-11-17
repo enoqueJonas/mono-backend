@@ -1,0 +1,54 @@
+@startuml
+title Desembolso RN06 — fluxo com duas ancoragens e verificação externa
+|Gestor do Grupo|
+start
+:Solicitar desembolso do ciclo;
+|Sistema|
+:Verificar rotação, elegibilidade, penalizações e contribuições;
+if (Dados elegíveis?) then (Sim)
+  :Criar proposta;
+else (Não)
+  :Rejeitar operação;
+  stop
+endif
+|Membros elegíveis|
+:Registar votos independentes;
+|Sistema|
+if (Maioria e mínimo 2?) then (Sim)
+  :Congelar referência e intenção aprovada;
+else (Não)
+  :Aguardar aprovações;
+  stop
+endif
+|Blockchain|
+:Ancorar hash da intenção;
+|Sistema|
+:Conservar recibo INTENT;
+|API M-Pesa (sandbox)|
+:Receber pedido B2C com referência idempotente;
+|Sistema|
+:Registar PENDING; nunca repetir pagamento após timeout;
+|Gestor do Grupo|
+:Solicitar reconciliação;
+|API M-Pesa (sandbox)|
+:Consultar estado financeiro da referência;
+|Sistema|
+if (Operador confirma o valor, a moeda e o beneficiário?) then (Sim)
+  :Registar prova do resultado verificado;
+else (Não)
+  :Manter pendente, desconhecido ou falhado;
+  stop
+endif
+|Blockchain|
+:Ancorar hash do resultado;
+|Sistema|
+if (Prova on-chain confirmada?) then (Sim)
+  :Concluir desembolso e avançar rotação;
+else (Não)
+  :Quarentena para reconciliação sem novo B2C;
+  stop
+endif
+|Gestor do Grupo|
+:Receber confirmação administrativa;
+stop
+@enduml
