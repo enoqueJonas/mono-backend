@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 /// @title DisbursementRegistry
-/// @notice Stores proofs of internal approval and externally VERIFIED settlement.
-///         Neither event itself transfers funds or proves a payment provider's honesty.
+/// @notice Records application approvals, simulated settlements and beneficiary
+///         acknowledgments. No event proves an actual external bank transfer.
 contract DisbursementRegistry {
     address public immutable operator;
 
@@ -17,6 +17,18 @@ contract DisbursementRegistry {
     }
 
     mapping(bytes32 => DisbursementProof) private proofs;
+
+    struct AcknowledgmentProof {
+        bytes32 evidenceHash;
+        uint64 acknowledgedAt;
+        bool exists;
+    }
+
+    mapping(bytes32 => AcknowledgmentProof) private acknowledgments;
+
+    event BeneficiaryAcknowledgmentRecorded(
+        bytes32 indexed disbursementId, bytes32 indexed evidenceHash
+    );
 
     event DisbursementAuthorized(bytes32 indexed disbursementId, bytes32 indexed authorizationHash);
     event DisbursementSettlementRecorded(bytes32 indexed disbursementId, bytes32 indexed settlementHash);
@@ -60,6 +72,30 @@ contract DisbursementRegistry {
         proof.settledAt = uint64(block.timestamp);
         proof.settled = true;
         emit DisbursementSettlementRecorded(disbursementId, settlementHash);
+    }
+
+    /// @notice App beneficiary acknowledges the custodian's claimed payment.
+    ///         This is NOT a payment service provider confirmation.
+    function recordBeneficiaryAcknowledgment(
+        bytes32 disbursementId,
+        bytes32 evidenceHash
+    ) external onlyOperator {
+        require(evidenceHash != bytes32(0), "Invalid acknowledgment hash");
+        require(proofs[disbursementId].authorized, "Authorization not recorded");
+        AcknowledgmentProof storage proof = acknowledgments[disbursementId];
+        require(!proof.exists, "Acknowledgment already recorded");
+
+        proof.evidenceHash = evidenceHash;
+        proof.acknowledgedAt = uint64(block.timestamp);
+        proof.exists = true;
+        emit BeneficiaryAcknowledgmentRecorded(disbursementId, evidenceHash);
+    }
+
+    function getBeneficiaryAcknowledgment(bytes32 disbursementId)
+        external view returns (bytes32 evidenceHash, uint64 acknowledgedAt, bool exists)
+    {
+        AcknowledgmentProof memory proof = acknowledgments[disbursementId];
+        return (proof.evidenceHash, proof.acknowledgedAt, proof.exists);
     }
 
     function getDisbursement(bytes32 disbursementId)
