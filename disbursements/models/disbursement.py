@@ -1,6 +1,7 @@
 import uuid
 
 from django.db import models
+from django.db.models import Q
 
 
 class Disbursement(models.Model):
@@ -79,6 +80,15 @@ class Disbursement(models.Model):
         auto_now_add=True,
     )
 
+    # Administrative declaration only; no independent payment-provider verification.
+    external_transfer_reference = models.CharField(
+        max_length=100, null=True, blank=True,
+    )
+    transfer_declared_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="declared_disbursement_transfers",
+    )
+
     completed_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -100,6 +110,14 @@ class Disbursement(models.Model):
     class Meta:
         ordering = [
             "-created_at",
+        ]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["group", "external_transfer_reference"],
+                condition=Q(external_transfer_reference__isnull=False),
+                name="unique_group_external_transfer_ref",
+            ),
         ]
 
         indexes = [
