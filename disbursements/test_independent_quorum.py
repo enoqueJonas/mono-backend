@@ -16,6 +16,8 @@ from disbursements.services.disbursement_service import (
     InsufficientDisbursementApprovals,
     InsufficientEligibleApprovers,
     IncompleteContributions,
+    MissingOrInvalidTransferReference,
+    InvalidDisbursementStatus,
 )
 from groups.models import Group, GroupMember, GroupSettings, RotationOrder
 from groups.serializers.create_group import CreateGroupSettingsSerializer
@@ -105,8 +107,11 @@ class IndependentDisbursementApprovalTests(TestCase):
         self.assertEqual(second.status, Disbursement.Status.APPROVED)
         self.assertEqual(disbursement.approvals.count(), 2)
         completed = DisbursementService.complete(
-            disbursement_id=disbursement.id, completed_by=self.manager
+            disbursement_id=disbursement.id, completed_by=self.manager,
+            transfer_reference="TX-DECLARADA-001",
         )
+        self.assertEqual(completed.transfer_declared_by, self.manager)
+        self.assertEqual(completed.external_transfer_reference, "TX-DECLARADA-001")
         self.assertEqual(completed.status, Disbursement.Status.COMPLETED)
         self.rotation.refresh_from_db()
         self.assertEqual(self.rotation.status, RotationOrder.Status.COMPLETED)
@@ -259,7 +264,7 @@ class IndependentDisbursementApprovalTests(TestCase):
 
         # The proposing manager cannot vote or complete before quorum.
         self.assertEqual(client.post(approve_url, format="json").status_code, 400)
-        self.assertEqual(client.post(complete_url, format="json").status_code, 400)
+        self.assertEqual(client.post(complete_url, {"transfer_reference": "MPESA-ABCD001"}, format="json").status_code, 400)
 
         client.force_authenticate(user=self.voter1)
         first = client.post(approve_url, format="json")
@@ -281,12 +286,14 @@ class IndependentDisbursementApprovalTests(TestCase):
         self.assertEqual(second.data["data"]["approval_count"], 2)
 
         client.force_authenticate(user=self.manager)
-        finished = client.post(complete_url, format="json")
+        finished = client.post(complete_url, {"transfer_reference": "MPESA-ABCD002"}, format="json")
         self.assertEqual(finished.status_code, 200)
         self.assertEqual(
             finished.data["data"]["status"],
             Disbursement.Status.COMPLETED,
         )
+        self.assertEqual(finished.data["data"]["external_transfer_reference"], "MPESA-ABCD002")
+        self.assertEqual(str(finished.data["data"]["transfer_declared_by"]), str(self.manager.pk))
         self.rotation.refresh_from_db()
         self.assertEqual(self.rotation.status, RotationOrder.Status.COMPLETED)
 
