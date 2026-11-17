@@ -59,6 +59,8 @@ class DisbursementSerializer(serializers.ModelSerializer):
             "approved_by_ids",
             "eligible_approver_ids",
             "completed_at",
+            "external_transfer_reference",
+            "transfer_declared_by",
             "failure_reason",
             "created_at",
             "updated_at",

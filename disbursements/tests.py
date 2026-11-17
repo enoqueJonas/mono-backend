@@ -514,6 +514,7 @@ class DisbursementServiceTests(TestCase):
         completed = DisbursementService.complete(
             disbursement_id=disbursement.id,
             completed_by=self.manager_user,
+                transfer_reference="TEST-TRANSFER-VALID-001",
         )
 
         self.assertEqual(
@@ -559,6 +560,7 @@ class DisbursementServiceTests(TestCase):
         DisbursementService.complete(
             disbursement_id=disbursement.id,
             completed_by=self.manager_user,
+                transfer_reference="TEST-TRANSFER-VALID-001",
         )
 
         self.rotation.refresh_from_db()
@@ -599,6 +601,7 @@ class DisbursementServiceTests(TestCase):
             DisbursementService.complete(
                 disbursement_id=disbursement.id,
                 completed_by=self.manager_user,
+                transfer_reference="TEST-TRANSFER-VALID-001",
             )
 
     def test_regular_member_cannot_complete_disbursement(
