@@ -266,17 +266,17 @@ class ExternalDisbursementWorkflowTests(TestCase):
             self.open(d)
 
 
-    @override_settings(
-        NON_CUSTODIAL_DISBURSEMENTS_ENABLED=False,
-        SANDBOX_PAYMENTS_ENABLED=False,
-        ALLOW_LEGACY_ADMINISTRATIVE_COMPLETION=False,
-    )
     def test_production_defaults_refuse_old_direct_completion(self):
         d = self.prepared()
-        with self.assertRaises(InvalidDisbursementStatus):
-            DisbursementService.complete(
-                disbursement_id=d.pk, completed_by=self.manager,
-            )
+        with override_settings(
+            NON_CUSTODIAL_DISBURSEMENTS_ENABLED=False,
+            SANDBOX_PAYMENTS_ENABLED=False,
+            ALLOW_LEGACY_ADMINISTRATIVE_COMPLETION=False,
+        ):
+            with self.assertRaises(InvalidDisbursementStatus):
+                DisbursementService.complete(
+                    disbursement_id=d.pk, completed_by=self.manager,
+                )
         d.refresh_from_db()
         self.assertEqual(d.status, Disbursement.Status.APPROVED)
         self.rotation.refresh_from_db()
