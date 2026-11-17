@@ -292,6 +292,10 @@ class DisbursementService:
     @staticmethod
     @transaction.atomic
     def complete(*, disbursement_id, completed_by) -> Disbursement:
+        if getattr(settings, "NON_CUSTODIAL_DISBURSEMENTS_ENABLED", False):
+            raise InvalidDisbursementStatus(
+                "É necessário registar a transferência externa e obter a confirmação do beneficiário."
+            )
         if getattr(settings, "SANDBOX_PAYMENTS_ENABLED", False):
             raise InvalidDisbursementStatus(
                 "Neste ambiente, a conclusão exige pagamento fictício confirmado "
