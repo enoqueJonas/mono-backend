@@ -264,6 +264,7 @@ class ExternalDisbursementOpenView(NonCustodialDisbursementActionView):
 
 class ExternalDisbursementReportView(NonCustodialDisbursementActionView):
     def get(self, request, group_id, disbursement_id):
+        NonCustodialDisbursementService.require_mode()
         d = self._get(group_id, disbursement_id)
         member = GroupMemberService.ensure_active_member(
             group_id=group_id, user=request.user,
