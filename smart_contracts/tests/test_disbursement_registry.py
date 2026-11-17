@@ -14,7 +14,7 @@ def test_only_operator_can_anchor_intent(registry):
         registry.anchorIntent(payout_id, proof, {"from": accounts[1]})
     registry.anchorIntent(payout_id, proof, {"from": accounts[0]})
     saved = registry.getProof(payout_id)
-    assert saved[0] == proof
+    assert str(saved[0]).removeprefix("0x").lower() == proof.hex()
     assert saved[2] > 0
 
 
@@ -31,7 +31,7 @@ def test_settlement_requires_intent_and_cannot_be_replaced(registry):
         registry.anchorSettlement(payout_id, settlement, {"from": accounts[1]})
     registry.anchorSettlement(payout_id, settlement, {"from": accounts[0]})
     saved = registry.getProof(payout_id)
-    assert saved[1] == settlement
+    assert str(saved[1]).removeprefix("0x").lower() == settlement.hex()
     assert saved[3] >= saved[2]
     with reverts("Settlement already anchored"):
         registry.anchorSettlement(payout_id, settlement, {"from": accounts[0]})
