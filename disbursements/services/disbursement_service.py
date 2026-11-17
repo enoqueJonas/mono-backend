@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -291,6 +292,11 @@ class DisbursementService:
     @staticmethod
     @transaction.atomic
     def complete(*, disbursement_id, completed_by) -> Disbursement:
+        if getattr(settings, "SANDBOX_PAYMENTS_ENABLED", False):
+            raise InvalidDisbursementStatus(
+                "Neste ambiente, a conclusão exige pagamento fictício confirmado "
+                "e prova blockchain; utilize a operação sandbox-execute."
+            )
         disbursement = (
             Disbursement.objects
             .select_for_update()
