@@ -211,7 +211,14 @@ class NonCustodialDisbursementService:
             cls._compare(proof["authorization_hash"], expected_hash)
 
         with transaction.atomic():
-            Group.objects.select_for_update().get(pk=d.group_id)
+            group = Group.objects.select_for_update().get(pk=d.group_id)
+            if group.status != Group.Status.ACTIVE:
+                raise InvalidDisbursementStatus("Grupo inactivo.")
+            mandate = TreasuryMandate.objects.select_related("custodian").filter(
+                group=group, custodian__status=GroupMember.Status.ACTIVE,
+            ).first()
+            if mandate is None or mandate.custodian_id == d.beneficiary_id:
+                raise InvalidCustodian("O responsável mudou ou não é independente do beneficiário.")
             updated = Disbursement.objects.select_for_update().get(pk=d.pk)
             if updated.status == Disbursement.Status.APPROVED:
                 # A membership change after blockchain submission blocks progression.
