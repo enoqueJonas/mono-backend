@@ -77,6 +77,12 @@ class NonCustodialDisbursementService:
             "currency": d.currency,
             "proposed_by_id": str(d.proposed_by_id),
             "required_approvals": d.required_approvals,
+            "custody_mandate": {
+                "id": d.group.treasury_mandate.pk,
+                "custodian_member_id": str(d.group.treasury_mandate.custodian_id),
+                "provider": d.group.treasury_mandate.provider,
+                "wallet_alias": d.group.treasury_mandate.wallet_alias,
+            },
             "approved_by_ids": sorted(
                 str(user_id) for user_id in d.approvals.values_list(
                     "approved_by_id", flat=True
@@ -177,6 +183,11 @@ class NonCustodialDisbursementService:
             ).first()
             if mandate is None:
                 raise InvalidCustodian("É necessário designar primeiro o responsável pela carteira.")
+            if mandate.custodian_id == d.beneficiary_id:
+                raise InvalidCustodian(
+                    "O responsável não pode receber o seu próprio desembolso "
+                    "neste protocolo; é necessário um procedimento independente."
+                )
             if group.status != Group.Status.ACTIVE:
                 raise InvalidDisbursementStatus("Grupo inactivo.")
             if d.status == Disbursement.Status.APPROVED:
@@ -271,7 +282,9 @@ class NonCustodialDisbursementService:
         group_id = Disbursement.objects.values_list(
             "group_id", flat=True
         ).get(pk=disbursement_id)
-        Group.objects.select_for_update().get(pk=group_id)
+        group = Group.objects.select_for_update().get(pk=group_id)
+        if group.status != Group.Status.ACTIVE:
+            raise InvalidDisbursementStatus("Grupo inactivo.")
         d = Disbursement.objects.select_for_update().select_related(
             "beneficiary__user"
         ).get(pk=disbursement_id)
@@ -309,6 +322,8 @@ class NonCustodialDisbursementService:
         GroupService.ensure_manager(group_id=d.group_id, user=requested_by)
         with transaction.atomic():
             group = Group.objects.select_for_update().get(pk=d.group_id)
+            if group.status != Group.Status.ACTIVE:
+                raise InvalidDisbursementStatus("Grupo inactivo.")
             d = Disbursement.objects.select_for_update().get(pk=disbursement_id)
             if d.status not in (
                 Disbursement.Status.EVIDENCE_PENDING,
@@ -342,6 +357,8 @@ class NonCustodialDisbursementService:
 
         with transaction.atomic():
             group = Group.objects.select_for_update().get(pk=d.group_id)
+            if group.status != Group.Status.ACTIVE:
+                raise InvalidDisbursementStatus("Grupo inactivo.")
             updated = Disbursement.objects.select_for_update().get(pk=d.pk)
             if updated.status == Disbursement.Status.COMPLETED:
                 return updated
