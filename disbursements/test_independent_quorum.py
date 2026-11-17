@@ -157,7 +157,7 @@ class IndependentDisbursementApprovalTests(TestCase):
         disbursement.save(update_fields=["status"])
         with self.assertRaises(InsufficientDisbursementApprovals):
             DisbursementService.complete(
-                disbursement_id=disbursement.id, completed_by=self.manager
+                disbursement_id=disbursement.id, completed_by=self.manager, transfer_reference="TEST-VALID-REFERENCE-001"
             )
         self.rotation.refresh_from_db()
         self.assertEqual(self.rotation.status, RotationOrder.Status.CURRENT)
@@ -173,7 +173,7 @@ class IndependentDisbursementApprovalTests(TestCase):
         membership.save(update_fields=["status", "updated_at"])
         with self.assertRaises(InsufficientDisbursementApprovals):
             DisbursementService.complete(
-                disbursement_id=disbursement.id, completed_by=self.manager
+                disbursement_id=disbursement.id, completed_by=self.manager, transfer_reference="TEST-VALID-REFERENCE-001"
             )
 
     def test_two_member_groups_fail_closed(self):
@@ -350,7 +350,7 @@ class IndependentDisbursementApprovalTests(TestCase):
 
         with self.assertRaises(IncompleteContributions):
             DisbursementService.complete(
-                disbursement_id=disbursement.id, completed_by=self.manager
+                disbursement_id=disbursement.id, completed_by=self.manager, transfer_reference="TEST-VALID-REFERENCE-001"
             )
         disbursement.refresh_from_db()
         self.rotation.refresh_from_db()
@@ -370,7 +370,7 @@ class IndependentDisbursementApprovalTests(TestCase):
 
         with self.assertRaises(IncompleteContributions):
             DisbursementService.complete(
-                disbursement_id=disbursement.id, completed_by=self.manager
+                disbursement_id=disbursement.id, completed_by=self.manager, transfer_reference="TEST-VALID-REFERENCE-001"
             )
         self.rotation.refresh_from_db()
         self.assertEqual(self.rotation.status, RotationOrder.Status.CURRENT)
@@ -395,7 +395,7 @@ class IndependentDisbursementApprovalTests(TestCase):
         )
         with self.assertRaises(IncompleteContributions):
             DisbursementService.complete(
-                disbursement_id=disbursement.id, completed_by=self.manager
+                disbursement_id=disbursement.id, completed_by=self.manager, transfer_reference="TEST-VALID-REFERENCE-001"
             )
         self.rotation.refresh_from_db()
         self.assertEqual(self.rotation.status, RotationOrder.Status.CURRENT)
@@ -426,7 +426,7 @@ class IndependentDisbursementApprovalTests(TestCase):
         )
         with self.assertRaises(IncompleteContributions):
             DisbursementService.complete(
-                disbursement_id=disbursement.id, completed_by=self.manager
+                disbursement_id=disbursement.id, completed_by=self.manager, transfer_reference="TEST-VALID-REFERENCE-001"
             )
         self.rotation.refresh_from_db()
         self.assertEqual(self.rotation.status, RotationOrder.Status.CURRENT)
@@ -455,7 +455,7 @@ class IndependentDisbursementApprovalTests(TestCase):
         intent.save(update_fields=["status", "updated_at"])
         with self.assertRaises(IncompleteContributions):
             DisbursementService.complete(
-                disbursement_id=disbursement.id, completed_by=self.manager
+                disbursement_id=disbursement.id, completed_by=self.manager, transfer_reference="TEST-VALID-REFERENCE-001"
             )
         self.rotation.refresh_from_db()
         self.assertEqual(self.rotation.status, RotationOrder.Status.CURRENT)
