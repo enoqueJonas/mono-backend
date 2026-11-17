@@ -5,6 +5,7 @@ from disbursements.views import (
     GroupDisbursementApproveView,
 
     GroupDisbursementCompleteView,
+    GroupSandboxDisbursementExecuteView,
 
     GroupDisbursementDetailView,
 
@@ -41,5 +42,13 @@ urlpatterns = [
         ),
         GroupDisbursementCompleteView.as_view(),
         name="group-disbursement-complete",
+    ),
+]
+
+urlpatterns += [
+    path(
+        "groups/<uuid:group_id>/disbursements/<uuid:disbursement_id>/sandbox-execute/",
+        GroupSandboxDisbursementExecuteView.as_view(),
+        name="group-disbursement-sandbox-execute",
     ),
 ]
