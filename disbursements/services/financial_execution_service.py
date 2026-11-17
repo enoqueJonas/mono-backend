@@ -68,10 +68,14 @@ class FinancialExecutionService:
         ):
             raise PayoutNotReady("Quórum RN06 insuficiente.")
         DisbursementService._ensure_beneficiary_can_receive(member=disbursement.beneficiary)
+        frozen_contributors = set(disbursement.eligible_approver_ids)
+        frozen_contributors.add(str(disbursement.proposed_by_id))
+        frozen_contributors.add(str(disbursement.beneficiary.user_id))
         DisbursementService._verified_contribution_total(
             group=disbursement.group,
             settings=disbursement.group_settings,
             period=disbursement.rotation_order.contribution_period,
+            frozen_contributor_user_ids=frozen_contributors,
             proposed_total=disbursement.amount,
         )
         if disbursement.currency != "MZN":
@@ -221,6 +225,13 @@ class FinancialExecutionService:
         with transaction.atomic():
             execution = FinancialExecutionService._get_locked(execution_id, actor)
             if execution.status == DisbursementExecution.Status.SETTLEMENT_ANCHORED:
+                # Recover post-anchor administrative completion without any
+                # second provider call or duplicate on-chain transaction.
+                if execution.disbursement.status != Disbursement.Status.COMPLETED:
+                    DisbursementService.complete(
+                        disbursement_id=execution.disbursement_id,
+                        completed_by=actor,
+                    )
                 return execution
             if execution.status not in (
                 DisbursementExecution.Status.PROVIDER_CONFIRMED,
