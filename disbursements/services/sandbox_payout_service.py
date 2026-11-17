@@ -7,6 +7,8 @@ RPC calls occur outside DB transactions. Retries reconcile before resubmitting.
 import hashlib
 import json
 
+from django.conf import settings
+
 from django.db import transaction
 
 from blockchain.clients.disbursement_registry_client import DisbursementRegistryClient
@@ -183,6 +185,8 @@ class SandboxPayoutService:
 
     @classmethod
     def execute(cls, *, disbursement_id, completed_by, client=None):
+        if getattr(settings, "NON_CUSTODIAL_DISBURSEMENTS_ENABLED", False):
+            raise InvalidDisbursementStatus("O desembolso automático está desactivado no modo não custodial.")
         SandboxLedgerService.require_enabled()
         original = Disbursement.objects.select_related("group").get(pk=disbursement_id)
         GroupService.ensure_manager(group_id=original.group_id, user=completed_by)
