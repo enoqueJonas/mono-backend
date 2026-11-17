@@ -294,6 +294,18 @@ class IndependentDisbursementApprovalTests(TestCase):
         )
         self.assertEqual(finished.data["data"]["external_transfer_reference"], "MPESA-ABCD002")
         self.assertEqual(str(finished.data["data"]["transfer_declared_by"]), str(self.manager.pk))
+
+        # Members can audit the manager's declaration; strangers cannot read it.
+        client.force_authenticate(user=self.beneficiary)
+        history = client.get(create_url)
+        self.assertEqual(history.status_code, 200)
+        self.assertEqual(len(history.data["data"]), 1)
+        self.assertEqual(
+            history.data["data"][0]["external_transfer_reference"],
+            "MPESA-ABCD002",
+        )
+        client.force_authenticate(user=self.outsider)
+        self.assertNotEqual(client.get(create_url).status_code, 200)
         self.rotation.refresh_from_db()
         self.assertEqual(self.rotation.status, RotationOrder.Status.COMPLETED)
 
