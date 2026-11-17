@@ -41,6 +41,7 @@ class Migration(migrations.Migration):
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
                 ("provider", models.CharField(max_length=20)),
                 ("reference", models.CharField(max_length=120)),
+                ("recipient_wallet_number", models.CharField(max_length=32)),
                 ("amount", models.DecimalField(max_digits=15, decimal_places=2)),
                 ("currency", models.CharField(max_length=3)),
                 ("status", models.CharField(
