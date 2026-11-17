@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from django.conf import settings
+from django.conf import settings as django_settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -198,7 +198,7 @@ class DisbursementService:
         beneficiary = current_rotation.member
         DisbursementService._ensure_beneficiary_can_receive(member=beneficiary)
 
-        if getattr(settings, "NON_CUSTODIAL_DISBURSEMENTS_ENABLED", False):
+        if getattr(django_settings, "NON_CUSTODIAL_DISBURSEMENTS_ENABLED", False):
             # A vote cannot authorize an unknown future custodian or wallet.
             # The designated custodian is immutable through the current API
             # and is bound into the authorization hash at execution.
@@ -311,16 +311,16 @@ class DisbursementService:
     @staticmethod
     @transaction.atomic
     def complete(*, disbursement_id, completed_by) -> Disbursement:
-        if getattr(settings, "NON_CUSTODIAL_DISBURSEMENTS_ENABLED", False):
+        if getattr(django_settings, "NON_CUSTODIAL_DISBURSEMENTS_ENABLED", False):
             raise InvalidDisbursementStatus(
                 "É necessário registar a transferência externa e obter a confirmação do beneficiário."
             )
-        if getattr(settings, "SANDBOX_PAYMENTS_ENABLED", False):
+        if getattr(django_settings, "SANDBOX_PAYMENTS_ENABLED", False):
             raise InvalidDisbursementStatus(
                 "Neste ambiente, a conclusão exige pagamento fictício confirmado "
                 "e prova blockchain; utilize a operação sandbox-execute."
             )
-        if not getattr(settings, "ALLOW_LEGACY_ADMINISTRATIVE_COMPLETION", False):
+        if not getattr(django_settings, "ALLOW_LEGACY_ADMINISTRATIVE_COMPLETION", False):
             raise InvalidDisbursementStatus(
                 "A conclusão administrativa directa está desactivada. "
                 "Utilize o fluxo de confirmação externa ou o laboratório de testes."
