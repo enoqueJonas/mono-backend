@@ -185,3 +185,6 @@ SANDBOX_PAYMENTS_ENABLED = env.bool("SANDBOX_PAYMENTS_ENABLED", default=False)
 
 # Only when explicitly enabled; disables legacy administrative completion and auto-pay.
 NON_CUSTODIAL_DISBURSEMENTS_ENABLED = env.bool("NON_CUSTODIAL_DISBURSEMENTS_ENABLED", default=False)
+
+# Fail closed: administrative completion bypass is for historical tests only.
+ALLOW_LEGACY_ADMINISTRATIVE_COMPLETION = env.bool("ALLOW_LEGACY_ADMINISTRATIVE_COMPLETION", default=False)
