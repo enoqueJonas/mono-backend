@@ -12,6 +12,10 @@ class Disbursement(models.Model):
             "Awaiting consensus",
         )
         APPROVED = "APPROVED", "Approved"
+        AWAITING_PAYMENT = "AWAITING_PAYMENT", "Awaiting external payment"
+        AWAITING_CONFIRMATION = "AWAITING_CONFIRMATION", "Awaiting beneficiary confirmation"
+        DISPUTED = "DISPUTED", "Payment disputed"
+        EVIDENCE_PENDING = "EVIDENCE_PENDING", "Awaiting on-chain evidence"
         PROCESSING = "PROCESSING", "Processing"
         COMPLETED = "COMPLETED", "Completed"
         FAILED = "FAILED", "Failed"
