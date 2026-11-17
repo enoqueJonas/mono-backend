@@ -192,6 +192,7 @@ class GroupExternalWalletCustodyView(APIView):
             return success(data=None)
         return success(data={
             "custodian": str(custody.custodian_id),
+            "custodian_user_id": str(custody.custodian.user_id),
             "provider": custody.provider,
             "wallet_number": custody.wallet_number,
             "verification_level": "SELF_DECLARED_NOT_PROVIDER_VERIFIED",
