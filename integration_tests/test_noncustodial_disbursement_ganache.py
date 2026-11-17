@@ -65,6 +65,12 @@ def _approved_fixture():
             contribution_period=date(2026, 11, 1),
             reference=f"EXTERNAL-E2E-CONTRIBUTION-{i}",
         )
+    ExternalService.appoint_custodian(
+        group_id=group.pk, appointed_by=manager,
+        group_member_id=memberships[treasurer.pk].pk,
+        provider=TreasuryMandate.Provider.MPESA,
+        wallet_alias="M-Pesa ***1402",
+    )
     d = DisbursementService.create(
         group_id=group.pk, cycle_number=1, created_by=manager,
     )
@@ -72,12 +78,6 @@ def _approved_fixture():
     DisbursementService.approve(disbursement_id=d.pk, approved_by=voter)
     d.refresh_from_db()
     assert d.status == Disbursement.Status.APPROVED
-    ExternalService.appoint_custodian(
-        group_id=group.pk, appointed_by=manager,
-        group_member_id=memberships[treasurer.pk].pk,
-        provider=TreasuryMandate.Provider.MPESA,
-        wallet_alias="M-Pesa ***1402",
-    )
     return group, manager, beneficiary, treasurer, d, rotation
 
 
