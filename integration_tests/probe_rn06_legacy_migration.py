@@ -1,7 +1,7 @@
 """Exercise an upgrade of *existing* RN06 records on disposable PostgreSQL.
 
 This migration probe goes beyond makemigrations --check: it creates a
-pre-0002 APPROVED record in the old SQL schema, applies 0002, then proves
+pre-0002 APPROVED record in the old SQL schema, upgrades through 0003, then proves
 the legacy record remains untrusted and cannot bypass the quorum.
 
 This is a CI-only test, never a production migration utility.
@@ -84,7 +84,7 @@ legacy = LegacyDisbursement.objects.create(
 legacy_id = legacy.pk
 
 # Upgrade the actual SQL schema and inspect the row via current application.
-call_command("migrate", "disbursements", "0002_independent_approvals", interactive=False, verbosity=0)
+call_command("migrate", "disbursements", "0003_manager_transfer_declaration", interactive=False, verbosity=0)
 
 from disbursements.models import Disbursement
 from disbursements.services.disbursement_service import (
@@ -103,6 +103,7 @@ try:
     DisbursementService.complete(
         disbursement_id=upgraded.id,
         completed_by=manager,
+        transfer_reference="LEGACY-UNTRUSTED-001",
     )
 except InsufficientDisbursementApprovals:
     pass
@@ -113,4 +114,6 @@ upgraded.refresh_from_db()
 rotation.refresh_from_db()
 assert upgraded.status == Disbursement.Status.APPROVED
 assert rotation.status == RotationOrder.Status.CURRENT
-print("RN06_LEGACY_UPGRADE_OK PostgreSQL schema=0001->0002 old_approved_record_untrusted=True rotation_not_advanced=True")
+assert upgraded.external_transfer_reference is None
+assert upgraded.transfer_declared_by_id is None
+print("RN06_LEGACY_UPGRADE_OK PostgreSQL schema=0001->0002->0003 old_approved_record_untrusted=True rotation_not_advanced=True")
