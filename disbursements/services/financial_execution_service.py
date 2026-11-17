@@ -148,6 +148,9 @@ class FinancialExecutionService:
     @staticmethod
     def send(*, execution_id, actor, gateway=None):
         FinancialExecutionService._enabled()
+        # Check configuration BEFORE claiming an external send. Missing keys
+        # are not a network timeout and must not quarantine a clean payout.
+        provider = gateway if gateway is not None else MpesaGateway()
         with transaction.atomic():
             execution = FinancialExecutionService._get_locked(execution_id, actor)
             if execution.status != DisbursementExecution.Status.INTENT_ANCHORED:
@@ -158,7 +161,7 @@ class FinancialExecutionService:
             execution.initiated_at = timezone.now()
             execution.save(update_fields=["status", "initiated_at", "updated_at"])
         try:
-            ack = (gateway or MpesaGateway()).send(execution)
+            ack = provider.send(execution)
         except Exception:
             with transaction.atomic():
                 execution = FinancialExecutionService._get_locked(execution_id, actor)
