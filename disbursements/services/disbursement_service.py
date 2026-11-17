@@ -1,11 +1,12 @@
 from decimal import Decimal
+from django.conf import settings
 
 from django.db import transaction
 from django.utils import timezone
 
 from contributions.models import Contribution, ContributionAnchorIntent
 from core.exceptions import DomainException
-from disbursements.models import Disbursement, DisbursementApproval
+from disbursements.models import Disbursement, DisbursementApproval, DisbursementExecution
 from groups.models import Group, GroupMember
 from groups.services.group_service import GroupService
 from groups.services.rotation_service import (
@@ -307,6 +308,16 @@ class DisbursementService:
             raise ArchivedGroup()
         if disbursement.status != Disbursement.Status.APPROVED:
             raise InvalidDisbursementStatus()
+
+        # Feature-gated protection: once the payout pipeline is activated,
+        # an administrative completion cannot bypass provider verification and
+        # immutable on-chain proof of the settlement.
+        if getattr(settings, "DISBURSEMENT_PAYOUT_REQUIRED", False):
+            execution = DisbursementExecution.objects.filter(disbursement=disbursement).first()
+            if not execution or execution.status != DisbursementExecution.Status.SETTLEMENT_ANCHORED:
+                raise InvalidDisbursementStatus(
+                    "Pagamento não confirmado e ancorado; conclusão recusada."
+                )
         DisbursementService._ensure_beneficiary_can_receive(
             member=disbursement.beneficiary
         )
