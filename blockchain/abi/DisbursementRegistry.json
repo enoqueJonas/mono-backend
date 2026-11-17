@@ -98,6 +98,72 @@
       ],
       "stateMutability": "view",
       "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "disbursementId",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "evidenceHash",
+          "type": "bytes32"
+        }
+      ],
+      "name": "recordBeneficiaryAcknowledgment",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "disbursementId",
+          "type": "bytes32"
+        }
+      ],
+      "name": "getBeneficiaryAcknowledgment",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "evidenceHash",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint64",
+          "name": "acknowledgedAt",
+          "type": "uint64"
+        },
+        {
+          "internalType": "bool",
+          "name": "exists",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "disbursementId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "internalType": "bytes32",
+          "name": "evidenceHash",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ],
+      "name": "BeneficiaryAcknowledgmentRecorded",
+      "type": "event"
     }
   ]
 }
