@@ -179,3 +179,6 @@ CORS_ALLOW_ALL_ORIGINS = True
 # Simulation-only wallet webhook, disabled unless explicitly configured.
 MOBILE_WALLET_WEBHOOK_ENABLED = env.bool("MOBILE_WALLET_WEBHOOK_ENABLED", default=False)
 MOBILE_WALLET_WEBHOOK_SECRET = env("MOBILE_WALLET_WEBHOOK_SECRET", default="")
+
+# Internal virtual-money laboratory; no external financial settlement.
+SANDBOX_PAYMENTS_ENABLED = env.bool("SANDBOX_PAYMENTS_ENABLED", default=False)
