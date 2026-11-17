@@ -28,3 +28,6 @@ DATABASES = {
     }
 }
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+
+# Only for isolated legacy-unit tests; production default must fail closed.
+ALLOW_LEGACY_ADMINISTRATIVE_COMPLETION = True
