@@ -182,6 +182,7 @@ class DisbursementPenaltyFlowTests(TestCase):
             DisbursementService.complete(
                 disbursement_id=disbursement.id,
                 completed_by=self.manager_user,
+                transfer_reference="TEST-TRANSFER-VALID-001",
             )
 
         disbursement.refresh_from_db()
