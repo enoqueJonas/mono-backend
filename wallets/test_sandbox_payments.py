@@ -134,6 +134,36 @@ class SandboxPayoutTests(TestCase):
         self.assertEqual(self.group_account().balance, Decimal("4000.00"))
         self.assertEqual(SandboxTransfer.objects.count(), 4)
 
+    def test_authenticated_api_pays_only_for_manager_with_quorum(self):
+        from unittest.mock import patch
+        from django.urls import reverse
+        from rest_framework.test import APIClient
+
+        d = self.propose_and_approve()
+        url = reverse("group-disbursement-sandbox-execute", kwargs={
+            "group_id": self.group.pk, "disbursement_id": d.pk,
+        })
+        client = APIClient()
+        with patch(
+            "disbursements.services.sandbox_payout_service.DisbursementRegistryClient",
+            return_value=self.chain,
+        ):
+            client.force_authenticate(user=self.voter1)
+            forbidden = client.post(url, format="json")
+            self.assertNotEqual(forbidden.status_code, 200)
+            self.assertEqual(self.group_account().balance, Decimal("4000.00"))
+
+            client.force_authenticate(user=self.manager)
+            paid = client.post(url, format="json")
+            self.assertEqual(paid.status_code, 200)
+            self.assertEqual(paid.data["data"]["status"], "COMPLETED")
+            self.assertEqual(self.group_account().balance, Decimal("0.00"))
+
+            replay = client.post(url, format="json")
+            self.assertEqual(replay.status_code, 200)
+            self.assertEqual(self.group_account().balance, Decimal("0.00"))
+            self.assertEqual(SandboxTransfer.objects.filter(purpose="PAYOUT").count(), 1)
+
     def test_full_virtual_disbursement_and_replay(self):
         d = self.propose_and_approve()
         with self.assertRaises(InvalidDisbursementStatus):
