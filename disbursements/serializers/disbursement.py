@@ -27,6 +27,16 @@ class DisbursementSerializer(serializers.ModelSerializer):
     )
 
     approval_count = serializers.SerializerMethodField()
+    beneficiary_user_id = serializers.SerializerMethodField()
+    custodian_user_id = serializers.SerializerMethodField()
+
+    def get_beneficiary_user_id(self, obj):
+        return str(obj.beneficiary.user_id)
+
+    def get_custodian_user_id(self, obj):
+        if obj.custodian_at_proposal_id is None:
+            return None
+        return str(obj.custodian_at_proposal.user_id)
     approved_by_ids = serializers.SerializerMethodField()
 
     external_payment = serializers.SerializerMethodField()
@@ -65,6 +75,7 @@ class DisbursementSerializer(serializers.ModelSerializer):
             "group_name",
             "beneficiary",
             "beneficiary_name",
+            "beneficiary_user_id",
             "rotation_order",
             "rotation_position",
             "group_settings",
@@ -81,6 +92,7 @@ class DisbursementSerializer(serializers.ModelSerializer):
             "approved_by_ids",
             "eligible_approver_ids",
             "custodian_at_proposal",
+            "custodian_user_id",
             "custody_provider_at_proposal",
             "custody_wallet_at_proposal",
             "external_payment",
