@@ -7,6 +7,7 @@ from brownie import (
     ContributionRegistry,
     CredentialRegistry,
     GroupRegistry,
+    DisbursementRegistry,
     accounts,
     network,
     config,
@@ -38,6 +39,7 @@ def _update_backend_env(
     credential_registry_address: str,
     group_registry_address: str,
     contribution_registry_address: str,
+    disbursement_registry_address: str,
 ):
     env_file = PROJECT_ROOT / ".env"
     lines = env_file.read_text().splitlines()
@@ -46,6 +48,7 @@ def _update_backend_env(
         "CREDENTIAL_REGISTRY_ADDRESS": credential_registry_address,
         "GROUP_REGISTRY_ADDRESS": group_registry_address,
         "CONTRIBUTION_REGISTRY_ADDRESS": contribution_registry_address,
+        "DISBURSEMENT_REGISTRY_ADDRESS": disbursement_registry_address,
     }
 
     updated_keys = set()
@@ -86,21 +89,24 @@ def main():
     credential_registry = CredentialRegistry.deploy({"from": account})
     group_registry = GroupRegistry.deploy({"from": account})
     contribution_registry = ContributionRegistry.deploy({"from": account})
+    disbursement_registry = DisbursementRegistry.deploy({"from": account})
 
     # Fail loudly on incomplete artifact/environment synchronization. Never
     # print "Backend updated" after a failed copy or .env write.
     _copy_backend_abi("CredentialRegistry")
     _copy_backend_abi("GroupRegistry")
     _copy_backend_abi("ContributionRegistry")
+    _copy_backend_abi("DisbursementRegistry")
 
     _update_backend_env(
         credential_registry_address=credential_registry.address,
         group_registry_address=group_registry.address,
         contribution_registry_address=contribution_registry.address,
+        disbursement_registry_address=disbursement_registry.address,
     )
 
     # Confirm the real contracts still expose the authorized immutable operator.
-    for contract in (credential_registry, group_registry, contribution_registry):
+    for contract in (credential_registry, group_registry, contribution_registry, disbursement_registry):
         if str(contract.operator()).lower() != str(account.address).lower():
             raise RuntimeError(
                 "Deployed registry operator is not the validated backend signer."
@@ -120,6 +126,9 @@ def main():
     print("ContributionRegistry")
     print(f"Address : {contribution_registry.address}")
     print()
+    print("DisbursementRegistry")
+    print(f"Address : {disbursement_registry.address}")
+    print()
     print("Backend updated")
     print("=" * 60)
 
@@ -127,4 +136,5 @@ def main():
         "credential_registry": credential_registry,
         "group_registry": group_registry,
         "contribution_registry": contribution_registry,
+        "disbursement_registry": disbursement_registry,
     }

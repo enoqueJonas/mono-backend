@@ -1,5 +1,5 @@
 /**
- * Compile all three registry contracts from the current checkout.
+ * Compile all registry contracts from the current checkout.
  *
  * The output overwrites the local backend ABI/bytecode artifacts. This script
  * intentionally runs in CI before the Ganache test, so a stale committed ABI
@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import solc from "solc";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const CONTRACT_NAMES = ["CredentialRegistry", "GroupRegistry", "ContributionRegistry"];
+const CONTRACT_NAMES = ["CredentialRegistry", "GroupRegistry", "ContributionRegistry", "DisbursementRegistry"];
 const EXPECTED_COMPILER = "0.8.20";
 
 if (!solc.version().startsWith(EXPECTED_COMPILER + "+")) {

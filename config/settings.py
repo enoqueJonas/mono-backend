@@ -177,3 +177,13 @@ CORS_ALLOW_ALL_ORIGINS = True
 # Simulation-only wallet webhook, disabled unless explicitly configured.
 MOBILE_WALLET_WEBHOOK_ENABLED = env.bool("MOBILE_WALLET_WEBHOOK_ENABLED", default=False)
 MOBILE_WALLET_WEBHOOK_SECRET = env("MOBILE_WALLET_WEBHOOK_SECRET", default="")
+
+# Financial disbursements are OFF by default. Enable only after credentialled
+# M-Pesa integration, registry deployment, and end-to-end financial tests.
+DISBURSEMENT_PAYOUT_REQUIRED = env.bool("DISBURSEMENT_PAYOUT_REQUIRED", default=False)
+DISBURSEMENT_REGISTRY_ADDRESS = env("DISBURSEMENT_REGISTRY_ADDRESS", default="")
+MPESA_B2C_ENABLED = env.bool("MPESA_B2C_ENABLED", default=False)
+MPESA_B2C_HOST = env("MPESA_B2C_HOST", default="https://api.sandbox.vm.co.mz")
+MPESA_B2C_API_KEY = env("MPESA_B2C_API_KEY", default="")
+MPESA_B2C_PUBLIC_KEY = env("MPESA_B2C_PUBLIC_KEY", default="")
+MPESA_B2C_SERVICE_PROVIDER_CODE = env("MPESA_B2C_SERVICE_PROVIDER_CODE", default="")

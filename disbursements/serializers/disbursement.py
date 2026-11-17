@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework import serializers
 
 from disbursements.models import Disbursement
@@ -28,6 +29,22 @@ class DisbursementSerializer(serializers.ModelSerializer):
 
     approval_count = serializers.SerializerMethodField()
     approved_by_ids = serializers.SerializerMethodField()
+    payout_required = serializers.SerializerMethodField()
+    payout_status = serializers.SerializerMethodField()
+    payout_reference = serializers.SerializerMethodField()
+    payout_transaction_id = serializers.SerializerMethodField()
+
+    def get_payout_required(self, obj):
+        return bool(getattr(settings, "DISBURSEMENT_PAYOUT_REQUIRED", False))
+
+    def get_payout_status(self, obj):
+        return obj.execution.status if hasattr(obj, "execution") else None
+
+    def get_payout_reference(self, obj):
+        return obj.execution.reference if hasattr(obj, "execution") else None
+
+    def get_payout_transaction_id(self, obj):
+        return obj.execution.provider_transaction_id if hasattr(obj, "execution") else None
 
     def get_approval_count(self, obj):
         return obj.approvals.count()
@@ -58,6 +75,10 @@ class DisbursementSerializer(serializers.ModelSerializer):
             "approval_count",
             "approved_by_ids",
             "eligible_approver_ids",
+            "payout_required",
+            "payout_status",
+            "payout_reference",
+            "payout_transaction_id",
             "completed_at",
             "failure_reason",
             "created_at",

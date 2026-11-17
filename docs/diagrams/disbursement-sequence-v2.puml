@@ -1,0 +1,52 @@
+@startuml
+title Desembolso RN06 — sequência implementada (branch experimental)
+autonumber
+actor "Gestor do Grupo" as M
+actor "Membros elegíveis" as V
+participant "Sistema Django" as APP
+database "PostgreSQL" as DB
+participant "DisbursementRegistry\n(Ganache)" as BC
+participant "M-Pesa B2C\n(Sandbox credenciado)" as WALLET
+note over APP, WALLET
+B2C produção bloqueado até reconciliação de
+fundos C2B e custódia regulamentada.
+A rede Ganache não movimenta fundos reais.
+end note
+M -> APP: proporDesembolso(ciclo)
+APP -> DB: verificarRotacaoContribuicoesPenalizacoes()
+APP --> M: AWAITING_CONSENSUS
+V -> APP: aprovar(voto1)
+V -> APP: aprovar(voto2)
+APP -> DB: validarQuorumEParticipantes()
+APP --> M: APPROVED
+M -> APP: executarDesembolso()
+APP -> DB: congelarReferenciaUnicaEProvaDeAutorizacao()
+APP -> BC: anchorIntent(id, hashIntencao)
+BC --> APP: recibo da intenção
+APP -> WALLET: B2C(ref, montante, beneficiario)
+WALLET --> APP: aceite/pending, não é liquidação
+APP -> DB: registar PENDING
+M -> APP: reconciliarEstado()
+APP -> WALLET: queryTransactionStatus(ref)
+alt PENDENTE ou desconhecido
+  WALLET --> APP: PENDING/UNKNOWN
+  APP -> DB: preservar estado; proibir reenvio
+  APP --> M: aguardar/reconciliar
+else FALHOU
+  WALLET --> APP: FAILED
+  APP -> DB: marcar PROVIDER_FAILED
+  APP --> M: desembolso não concluído
+else SUCESSO com referência, valor e beneficiário coincidentes
+  WALLET --> APP: SUCCESS + prova do operador
+  APP -> DB: marcar PROVIDER_CONFIRMED
+  APP -> BC: anchorSettlement(id, hashResultado)
+  alt Falha ou recibo incerto da blockchain
+    APP -> DB: SETTLEMENT_ANCHORING
+    APP --> M: recuperar prova, sem reenviar dinheiro
+  else Prova confirmada
+    BC --> APP: recibo do resultado
+    APP -> DB: SETTLEMENT_ANCHORED + COMPLETED + rotação seguinte
+    APP --> M: desembolso concluído administrativamente
+  end
+end
+@enduml
