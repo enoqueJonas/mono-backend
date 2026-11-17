@@ -12,14 +12,15 @@
 - **Blockchain**: guarda o hash da autorização e separadamente o hash da declaração de recepção do beneficiário, sem identificar este segundo evento como liquidação comprovada.
 
 ## Sequência
-1. Criar a proposta conforme a rotação e contribuições (`AWAITING_CONSENSUS`).
-2. Votos RN06 até `APPROVED`.
-3. Após nomear o titular de carteira, o gestor pede ancoragem da autorização. O hash contém proposta, participantes da votação e identificação/versão do mandato de custódia. Confirmada a transacção EVM, o estado passa a `AWAITING_PAYMENT`.
-4. O titular realiza, **fora da aplicação**, a transferência a partir da sua carteira externa; o Mono não chama APIs M-Pesa/e-Mola.
-5. O titular declara a referência; o Mono regista o valor e moeda imutavelmente a partir da proposta, e passa a `AWAITING_CONFIRMATION`.
-6. O beneficiário confirma a recepção (`EVIDENCE_PENDING`) ou contesta com justificação (`DISPUTED`).
-7. Em caso positivo, o gestor ancora um hash etiquetado `SELF_REPORTED_EXTERNAL_PAYMENT` ligado à referência e às identidades das contas de declaração/recepção.
-8. Após confirmação da ancoragem, o processo é `COMPLETED` e a rotação avança. O sistema **não pode afirmar confirmação por PSP**.
+1. **Antes da proposta**, o gestor designa o responsável por uma carteira externa; o sistema exige que seja um membro activo diferente do beneficiário. Não existe votação colectiva específica sobre essa designação.
+2. Criar a proposta conforme a rotação e contribuições (`AWAITING_CONSENSUS`), com o responsável já definido e visível aos membros.
+3. Votos RN06 até `APPROVED`.
+4. O gestor pede ancoragem da autorização. O hash contém proposta, participantes da votação e identificação/atributos do mandato de custódia. Confirmada a transacção EVM, o estado passa a `AWAITING_PAYMENT`.
+5. O titular realiza, **fora da aplicação**, a transferência a partir da sua carteira externa; o Mono não chama APIs M-Pesa/e-Mola.
+6. O titular declara a referência; o Mono regista o valor e moeda imutavelmente a partir da proposta, e passa a `AWAITING_CONFIRMATION`.
+7. O beneficiário confirma a recepção (`EVIDENCE_PENDING`) ou contesta com justificação (`DISPUTED`).
+8. Em caso positivo, o gestor ancora um hash etiquetado `SELF_REPORTED_EXTERNAL_PAYMENT` ligado à referência e às identidades das contas de declaração/recepção.
+9. Após confirmação da ancoragem, o processo é `COMPLETED` e a rotação avança. O sistema **não pode afirmar confirmação por PSP**.
 
 ## API, modelo e flags
 - `POST/GET /api/v1/groups/{group_id}/treasury-mandate/` — nomeação e consulta da carteira externa (identificador abreviado, sem PIN).
@@ -30,7 +31,7 @@
 - `NON_CUSTODIAL_DISBURSEMENTS_ENABLED=true` habilita as novas operações.
 - `SANDBOX_PAYMENTS_ENABLED=false` impede o antigo pagamento automático de laboratório.
 - `ALLOW_LEGACY_ADMINISTRATIVE_COMPLETION=false` impede concluir pela rota administrativa histórica. O modo de teste antigo apenas é permitido no `config.settings_test` para preservar cenários unitários legados.
-- UI: `NEXT_PUBLIC_NON_CUSTODIAL_DISBURSEMENTS_ENABLED=true`, desactiva botões antigos e apresenta as novas acções.
+- UI: `NEXT_PUBLIC_NON_CUSTODIAL_DISBURSEMENTS_ENABLED=true`, desactiva botões antigos, apresenta o titular designado antes dos votos e oferece as novas acções.
 - É obrigatório implantar uma versão **nova** do `DisbursementRegistry` com `recordBeneficiaryAcknowledgment`; um contrato já implantado não ganha esse método automaticamente.
 
 ## Evidência da implementação experimental
@@ -45,7 +46,7 @@
 1. **Dinheiro fora do controlo do Mono**: a RN06 não pode bloquear transferências que o titular faça directamente no M-Pesa/e-Mola; isto é controlo de decisão, não custódia nem garantia de fundos.
 2. A referência declarada **não é validada com o prestador**. A confirmação do beneficiário é uma declaração de utilizador, não uma confirmação financeira independente. O conluio continua possível.
 3. O gestor nomeia o titular **sem voto colectivo específico sobre o mandato de custódia**; não afirmar que houve aprovação RN06 deste mandato. Um protocolo de nomeação/substituição é evolução futura.
-4. Quando titular e beneficiário são a **mesma pessoa**, este fluxo bloqueia a execução: falta uma política de testemunha/retensão independente. Não existe ainda uma forma de substituir o titular depois da nomeação.
+4. Quando titular e beneficiário são a **mesma pessoa**, este fluxo bloqueia a **criação da proposta**: falta uma política de testemunha/retensão independente. Não existe ainda uma forma de substituir o titular depois da nomeação.
 5. Contestação `DISPUTED` fica bloqueada para resolução externa; ainda não existe um processo formal de arbitragem, correcção ou segunda confirmação.
 6. A assinatura dos votos/declarações é a autenticação da aplicação (JWT). Não são assinaturas criptográficas individuais guardadas pelo membro.
 7. A prova EVM resiste à alteração do histórico da cadeia, mas não garante que uma declaração falsa nunca foi apresentada nem que o operador da aplicação é honesto.
