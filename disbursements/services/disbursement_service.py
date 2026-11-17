@@ -1,4 +1,5 @@
 from decimal import Decimal
+import re
 
 from django.db import transaction
 from django.utils import timezone
@@ -64,6 +65,14 @@ class DuplicateDisbursementApproval(DomainException):
 
 class InsufficientDisbursementApprovals(DomainException):
     default_message = "Quórum de aprovações independentes insuficiente ou inválido."
+
+
+class MissingOrInvalidTransferReference(DomainException):
+    default_message = "Introduza uma referência válida da transferência efectuada fora do Mono."
+
+
+class DuplicateTransferReference(DomainException):
+    default_message = "Esta referência de transferência já foi declarada neste grupo."
 
 
 class DisbursementService:
@@ -290,7 +299,7 @@ class DisbursementService:
 
     @staticmethod
     @transaction.atomic
-    def complete(*, disbursement_id, completed_by) -> Disbursement:
+    def complete(*, disbursement_id, completed_by, transfer_reference=None) -> Disbursement:
         disbursement = (
             Disbursement.objects
             .select_for_update()
@@ -307,6 +316,15 @@ class DisbursementService:
             raise ArchivedGroup()
         if disbursement.status != Disbursement.Status.APPROVED:
             raise InvalidDisbursementStatus()
+        # A reported reference does NOT verify the underlying external transfer.
+        reference = (transfer_reference or "").strip().upper()
+        if not re.fullmatch(r"[A-Z0-9][A-Z0-9._/-]{4,99}", reference):
+            raise MissingOrInvalidTransferReference()
+        if Disbursement.objects.filter(
+            group_id=disbursement.group_id,
+            external_transfer_reference=reference,
+        ).exclude(pk=disbursement.pk).exists():
+            raise DuplicateTransferReference()
         DisbursementService._ensure_beneficiary_can_receive(
             member=disbursement.beneficiary
         )
@@ -335,9 +353,14 @@ class DisbursementService:
 
         # Administrative record only: does not transfer or settle external funds.
         disbursement.status = Disbursement.Status.COMPLETED
+        disbursement.external_transfer_reference = reference
+        disbursement.transfer_declared_by = completed_by
         disbursement.completed_at = timezone.now()
         disbursement.save(
-            update_fields=["status", "completed_at", "updated_at"]
+            update_fields=[
+                "status", "external_transfer_reference", "transfer_declared_by",
+                "completed_at", "updated_at",
+            ]
         )
         RotationService.advance(
             group=disbursement.group,
