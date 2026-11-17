@@ -16,10 +16,10 @@ Estados necessários: AWAITING_CONSENSUS, APPROVED, AUTHORIZATION_ANCHOR_PENDING
 - `smart_contracts/contracts/DisbursementRegistry.sol`: `recordAuthorization`, `recordSettlement`, leitura dos dois hashes e datas, guardião de operador, impossibilidade de liquidação sem autorização ancorada ou duplicação.
 - `smart_contracts/tests/test_disbursement_registry.py`: cenários positivos e negativos Brownie, ainda não executados neste commit.
 - Este contrato **não transfere fundos** e a ancoragem do hash não prova, por si, que houve pagamento. A confirmação depende de integração efectiva com prestador verificado.
-- Contrato ainda não está integrado no deploy, Web3.py, Django e frontend; a entrega presente é base do sistema de provas, **não implementação completa de A.4/A.8**.
+- O contrato está integrado no script de deploy, dispõe de ABI no backend, configuração `DISBURSEMENT_REGISTRY_ADDRESS` e cliente Web3.py com guardião de operador, mas **ainda não está ligado aos serviços de desembolso Django nem ao frontend**. É uma base para o sistema de provas, **não implementação completa de A.4/A.8**. As suites Brownie/Django ainda não foram executadas nesta intervenção.
 
 ## Gates para considerar a funcionalidade implementada
-1. Integrar contrato no deploy, ABI, settings, client Web3 e migrações; instrumentar intents/outbox e recuperação após erro entre SQL e Ganache.
+1. **Feito no código:** contrato, deploy, ABI, settings e cliente Web3. **Pendente:** ligar ao fluxo Django com migrações e intents/outbox, testes integrados e recuperação após erro entre SQL e Ganache.
 2. Implementar adaptador PSP real com credenciais válidas, autorização explícita, idempotency key e consulta de estado final, ou manter modo *simulação* rotulado que **não marca pagamento liquidado**.
 3. Não confirmar transferência apenas com resposta HTTP 200; validar referência do PSP, montante, moeda, beneficiário, assinatura de webhook, estado definitivo e reconciliação.
 4. Testar payout falhado, repetição do webhook, timeout após envio incerto, confirmação tardia, payload adulterado, mudança de beneficiário, dinheiro debitado sem confirmação SQL, falha após confirmação de PSP antes de ancorar, e falha na ancoragem depois da liquidação.
