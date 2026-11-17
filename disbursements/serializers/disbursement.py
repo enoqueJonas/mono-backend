@@ -27,7 +27,39 @@ class DisbursementSerializer(serializers.ModelSerializer):
     )
 
     approval_count = serializers.SerializerMethodField()
+    beneficiary_user_id = serializers.SerializerMethodField()
+    custodian_user_id = serializers.SerializerMethodField()
+
+    def get_beneficiary_user_id(self, obj):
+        return str(obj.beneficiary.user_id)
+
+    def get_custodian_user_id(self, obj):
+        if obj.custodian_at_proposal_id is None:
+            return None
+        return str(obj.custodian_at_proposal.user_id)
     approved_by_ids = serializers.SerializerMethodField()
+
+    external_payment = serializers.SerializerMethodField()
+
+    def get_external_payment(self, obj):
+        from disbursements.models import ExternalPaymentReport
+        report = ExternalPaymentReport.objects.filter(disbursement=obj).first()
+        if report is None:
+            return None
+        return {
+            "provider": report.provider,
+            "reference": report.reference,
+            "recipient_wallet_number": report.recipient_wallet_number,
+            "reported_by": str(report.reported_by_id),
+            "status": report.status,
+            "reported_at": report.reported_at,
+            "confirmed_by": str(report.confirmed_by_id) if report.confirmed_by_id else None,
+            "confirmed_at": report.confirmed_at,
+            "disputed_at": report.disputed_at,
+            "dispute_reason": report.dispute_reason,
+            "verification_level": "BENEFICIARY_ATTESTED" if report.confirmed_at else "UNVERIFIED_CLAIM",
+        }
+
 
     def get_approval_count(self, obj):
         return obj.approvals.count()
@@ -43,6 +75,7 @@ class DisbursementSerializer(serializers.ModelSerializer):
             "group_name",
             "beneficiary",
             "beneficiary_name",
+            "beneficiary_user_id",
             "rotation_order",
             "rotation_position",
             "group_settings",
@@ -58,6 +91,11 @@ class DisbursementSerializer(serializers.ModelSerializer):
             "approval_count",
             "approved_by_ids",
             "eligible_approver_ids",
+            "custodian_at_proposal",
+            "custodian_user_id",
+            "custody_provider_at_proposal",
+            "custody_wallet_at_proposal",
+            "external_payment",
             "completed_at",
             "failure_reason",
             "created_at",

@@ -13,6 +13,8 @@ class Disbursement(models.Model):
         )
         APPROVED = "APPROVED", "Approved"
         PROCESSING = "PROCESSING", "Processing"
+        PAYMENT_REPORTED = "PAYMENT_REPORTED", "External payment reported"
+        DISPUTED = "DISPUTED", "Payment disputed"
         COMPLETED = "COMPLETED", "Completed"
         FAILED = "FAILED", "Failed"
         CANCELLED = "CANCELLED", "Cancelled"
@@ -74,6 +76,15 @@ class Disbursement(models.Model):
     )
     required_approvals = models.PositiveIntegerField(default=2)
     eligible_approver_ids = models.JSONField(default=list)
+
+    # Frozen custody at RN06 proposal creation; never silently switch payer.
+    custodian_at_proposal = models.ForeignKey(
+        "groups.GroupMember", on_delete=models.PROTECT,
+        related_name="custodied_disbursement_proposals",
+        null=True, blank=True,
+    )
+    custody_provider_at_proposal = models.CharField(max_length=20, blank=True, default="")
+    custody_wallet_at_proposal = models.CharField(max_length=32, blank=True, default="")
 
     requested_at = models.DateTimeField(
         auto_now_add=True,

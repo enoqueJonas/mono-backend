@@ -1,11 +1,12 @@
 from decimal import Decimal
 
+from django.conf import settings as django_settings
 from django.db import transaction
 from django.utils import timezone
 
 from contributions.models import Contribution, ContributionAnchorIntent
 from core.exceptions import DomainException
-from disbursements.models import Disbursement, DisbursementApproval
+from disbursements.models import Disbursement, DisbursementApproval, ExternalWalletCustody
 from groups.models import Group, GroupMember
 from groups.services.group_service import GroupService
 from groups.services.rotation_service import (
@@ -223,6 +224,33 @@ class DisbursementService:
 
         # Strict majority of non-proposer, non-beneficiary active members.
         quorum = max(2, len(eligible_user_ids) // 2 + 1)
+        # Freeze the external wallet custodian and the reported source account
+        # when RN06 is enabled, so a later group change cannot redirect payout.
+        custody_snapshot = {}
+        if getattr(django_settings, "NONCUSTODIAL_WALLET_FLOW_ENABLED", False):
+            custody = ExternalWalletCustody.objects.select_related("custodian").filter(
+                group=group
+            ).first()
+            if (
+                custody is None
+                or custody.custodian.group_id != group.id
+                or custody.custodian.status != GroupMember.Status.ACTIVE
+                or custody.custodian.role not in (
+                    GroupMember.Role.MANAGER, GroupMember.Role.TREASURER
+                )
+            ):
+                raise InvalidDisbursementStatus(
+                    "O grupo deve designar um gestor ou tesoureiro responsável pela carteira."
+                )
+            if custody.custodian_id == beneficiary.id:
+                raise InvalidDisbursementStatus(
+                    "O beneficiário não pode ser responsável pelo pagamento deste ciclo."
+                )
+            custody_snapshot = {
+                "custodian_at_proposal": custody.custodian,
+                "custody_provider_at_proposal": custody.provider,
+                "custody_wallet_at_proposal": custody.wallet_number,
+            }
         # Deliberately ignore legacy requires_consensus=False; no bypass.
         return Disbursement.objects.create(
             group=group,
@@ -236,6 +264,7 @@ class DisbursementService:
             proposed_by=created_by,
             required_approvals=quorum,
             eligible_approver_ids=eligible_user_ids,
+            **custody_snapshot,
         )
 
     @staticmethod
@@ -291,6 +320,10 @@ class DisbursementService:
     @staticmethod
     @transaction.atomic
     def complete(*, disbursement_id, completed_by) -> Disbursement:
+        if getattr(django_settings, "NONCUSTODIAL_WALLET_FLOW_ENABLED", False):
+            raise InvalidDisbursementStatus(
+                "A conclusão exige declaração do responsável e confirmação do beneficiário."
+            )
         disbursement = (
             Disbursement.objects
             .select_for_update()
