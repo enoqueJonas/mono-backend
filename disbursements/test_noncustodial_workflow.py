@@ -221,6 +221,48 @@ class ExternalDisbursementWorkflowTests(TestCase):
         self.assertEqual(repaired.status, Disbursement.Status.COMPLETED)
         self.assertEqual(self.chain.ack_count, 1)
 
+
+    def test_custodian_cannot_self_confirm_their_own_turn(self):
+        d = DisbursementService.create(
+            group_id=self.group.pk, cycle_number=1, created_by=self.manager,
+        )
+        DisbursementService.approve(disbursement_id=d.pk, approved_by=self.treasurer)
+        DisbursementService.approve(disbursement_id=d.pk, approved_by=self.voter2)
+        Service.appoint_custodian(
+            group_id=self.group.pk, appointed_by=self.manager,
+            group_member_id=self.members[self.beneficiary.pk].pk,
+            provider=TreasuryMandate.Provider.MPESA, wallet_alias="M-Pesa ***1234",
+        )
+        with self.assertRaises(InvalidCustodian):
+            self.open(d)
+        d.refresh_from_db()
+        self.assertEqual(d.status, Disbursement.Status.APPROVED)
+        self.assertEqual(self.chain.authorization_count, 0)
+
+    def test_archived_group_blocks_late_confirmation_and_completion(self):
+        d = self.prepared()
+        self.open(d)
+        self.report(d)
+        self.group.status = Group.Status.ARCHIVED
+        self.group.save(update_fields=["status"])
+        with self.assertRaises(InvalidDisbursementStatus):
+            Service.respond_to_report(
+                disbursement_id=d.pk, responded_by=self.beneficiary, received=True,
+            )
+        d.refresh_from_db()
+        self.assertEqual(d.status, Disbursement.Status.AWAITING_CONFIRMATION)
+
+    def test_treasury_wallet_identifier_is_bound_to_onchain_authorization(self):
+        d = self.prepared()
+        self.open(d)
+        mandate = TreasuryMandate.objects.get(group=self.group)
+        before = Service.authorization_hash(d)
+        mandate.wallet_alias = "M-Pesa ***9999"
+        mandate.save(update_fields=["wallet_alias"])
+        self.assertNotEqual(Service.authorization_hash(d), before)
+        with self.assertRaises(ExternalEvidenceMismatch):
+            self.open(d)
+
     def test_api_manager_only_custodian_only_and_beneficiary_only(self):
         from unittest.mock import patch
         client = APIClient()
