@@ -66,9 +66,9 @@ class NonCustodialDisbursementService:
 
     @classmethod
     def authorization_hash(cls, d):
-        """Replicates the frozen RN06 authorization format already in sandbox."""
+        """Hash the frozen RN06 decision, independently of payment execution."""
         return cls._digest({
-            "schema": "mono-sandbox-authorization-v1",
+            "schema": "mono-disbursement-authorization-v1",
             "disbursement_id": str(d.pk),
             "group_id": str(d.group_id),
             "beneficiary_id": str(d.beneficiary_id),
