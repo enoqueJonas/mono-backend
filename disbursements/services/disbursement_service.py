@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from contributions.models import Contribution, ContributionAnchorIntent
 from core.exceptions import DomainException
-from disbursements.models import Disbursement, DisbursementApproval
+from disbursements.models import Disbursement, DisbursementApproval, TreasuryMandate
 from groups.models import Group, GroupMember
 from groups.services.group_service import GroupService
 from groups.services.rotation_service import (
@@ -197,6 +197,25 @@ class DisbursementService:
         )
         beneficiary = current_rotation.member
         DisbursementService._ensure_beneficiary_can_receive(member=beneficiary)
+
+        if getattr(settings, "NON_CUSTODIAL_DISBURSEMENTS_ENABLED", False):
+            # A vote cannot authorize an unknown future custodian or wallet.
+            # The designated custodian is immutable through the current API
+            # and is bound into the authorization hash at execution.
+            mandate = TreasuryMandate.objects.filter(
+                group=group,
+                custodian__status=GroupMember.Status.ACTIVE,
+            ).first()
+            if mandate is None:
+                raise InvalidDisbursementStatus(
+                    "Designe a carteira externa e o membro responsável antes "
+                    "de criar a proposta para votação RN06."
+                )
+            if mandate.custodian_id == beneficiary.id:
+                raise InvalidDisbursementStatus(
+                    "O responsável pela carteira é o beneficiário deste ciclo. "
+                    "É necessário definir uma política independente antes de propor."
+                )
 
         if Disbursement.objects.filter(rotation_order=current_rotation).exists():
             raise DisbursementAlreadyExists()
