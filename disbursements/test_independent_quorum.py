@@ -459,3 +459,108 @@ class IndependentDisbursementApprovalTests(TestCase):
             )
         self.rotation.refresh_from_db()
         self.assertEqual(self.rotation.status, RotationOrder.Status.CURRENT)
+
+
+    def _approved_for_transfer_declaration(self):
+        d = self.propose()
+        DisbursementService.approve(disbursement_id=d.pk, approved_by=self.voter1)
+        DisbursementService.approve(disbursement_id=d.pk, approved_by=self.voter2)
+        d.refresh_from_db()
+        self.assertEqual(d.status, Disbursement.Status.APPROVED)
+        return d
+
+    def test_missing_or_invalid_reference_cannot_advance_rotation(self):
+        from disbursements.services.disbursement_service import MissingOrInvalidTransferReference
+        d = self._approved_for_transfer_declaration()
+        for reference in (None, "", "   ", "AB", "A BCD", "A" * 101):
+            with self.subTest(reference=reference):
+                with self.assertRaises(MissingOrInvalidTransferReference):
+                    DisbursementService.complete(
+                        disbursement_id=d.pk, completed_by=self.manager,
+                        transfer_reference=reference,
+                    )
+        d.refresh_from_db()
+        self.assertEqual(d.status, Disbursement.Status.APPROVED)
+        self.assertIsNone(d.external_transfer_reference)
+        self.rotation.refresh_from_db()
+        self.assertEqual(self.rotation.status, RotationOrder.Status.CURRENT)
+
+    def test_manager_permission_and_single_completion(self):
+        from disbursements.services.disbursement_service import InvalidDisbursementStatus
+        d = self._approved_for_transfer_declaration()
+        with self.assertRaises(DomainException):
+            DisbursementService.complete(
+                disbursement_id=d.pk, completed_by=self.voter1,
+                transfer_reference="M-MPESA-000101",
+            )
+        finished = DisbursementService.complete(
+            disbursement_id=d.pk, completed_by=self.manager,
+            transfer_reference="   tx-reference-001  ",
+        )
+        self.assertEqual(finished.external_transfer_reference, "TX-REFERENCE-001")
+        self.assertEqual(finished.transfer_declared_by, self.manager)
+        with self.assertRaises(InvalidDisbursementStatus):
+            DisbursementService.complete(
+                disbursement_id=d.pk, completed_by=self.manager,
+                transfer_reference="TX-REFERENCE-002",
+            )
+        d.refresh_from_db()
+        self.assertEqual(d.external_transfer_reference, "TX-REFERENCE-001")
+
+    def test_api_rejects_missing_reference_even_after_quorum(self):
+        d = self._approved_for_transfer_declaration()
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+        url = reverse("group-disbursement-complete", kwargs={
+            "group_id": self.group.pk, "disbursement_id": d.pk,
+        })
+        for payload in ({}, {"transfer_reference": ""}, {"transfer_reference": "A BCD"}):
+            with self.subTest(payload=payload):
+                response = client.post(url, payload, format="json")
+                self.assertEqual(response.status_code, 400)
+        d.refresh_from_db()
+        self.assertEqual(d.status, Disbursement.Status.APPROVED)
+        self.rotation.refresh_from_db()
+        self.assertEqual(self.rotation.status, RotationOrder.Status.CURRENT)
+
+    def test_group_reference_cannot_be_reused_in_another_record(self):
+        from django.db import IntegrityError, transaction as db_transaction
+        from disbursements.services.disbursement_service import DuplicateTransferReference
+        first = self._approved_for_transfer_declaration()
+        DisbursementService.complete(
+            disbursement_id=first.pk, completed_by=self.manager,
+            transfer_reference="M-TRANSFER-001",
+        )
+        second_rotation = RotationOrder.objects.create(
+            group=self.group,
+            member=self.members[self.voter1.pk],
+            group_settings=self.settings,
+            contribution_period=self.period,
+            cycle_number=2,
+            position=2,
+            status=RotationOrder.Status.PENDING,
+        )
+        second = Disbursement.objects.create(
+            group=self.group,
+            beneficiary=self.members[self.voter1.pk],
+            rotation_order=second_rotation,
+            group_settings=self.settings,
+            cycle_number=2,
+            amount=first.amount,
+            currency=first.currency,
+            proposed_by=self.manager,
+            required_approvals=2,
+            eligible_approver_ids=first.eligible_approver_ids,
+            status=Disbursement.Status.APPROVED,
+        )
+        # Before any further validation, reusing a reference is rejected.
+        with self.assertRaises(DuplicateTransferReference):
+            DisbursementService.complete(
+                disbursement_id=second.pk, completed_by=self.manager,
+                transfer_reference="m-transfer-001",
+            )
+        # Database also rejects writes that bypass the service.
+        with self.assertRaises(IntegrityError):
+            with db_transaction.atomic():
+                second.external_transfer_reference = "M-TRANSFER-001"
+                second.save(update_fields=["external_transfer_reference"])
