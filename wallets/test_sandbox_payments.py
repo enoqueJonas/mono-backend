@@ -173,19 +173,26 @@ class SandboxPayoutTests(TestCase):
 
     def test_insufficient_virtual_balance_rejects_without_debit(self):
         d = self.propose_and_approve()
-        c = Contribution.objects.get(reference="SANDBOX-CONTRIBUTION-0")
-        # Move an already recorded simulated credit to a distinct test account
-        # to reduce group balance; do not alter actual contribution records.
-        group = self.group_account()
-        group.balance = Decimal("3000.00")
-        group.save(update_fields=["balance"])
+        # Create an unrelated, balanced virtual debit so this scenario never
+        # tampers directly with balance data or the contribution records.
+        from django.db import transaction
+        with transaction.atomic():
+            group = self.group_account()
+            recipient = SandboxLedgerService._account(
+                "MEMBER:TEST-OTHER:MZN", SandboxAccount.Role.MEMBER, "MZN"
+            )
+            SandboxLedgerService._record(
+                key="TEST-OTHER-EXPENSE", purpose=SandboxTransfer.Purpose.PAYOUT,
+                source=group, destination=recipient, amount=Decimal("1000.00"),
+                currency="MZN", reference="TEST-OTHER-EXPENSE",
+            )
         with self.assertRaises(SandboxInsufficientFunds):
             SandboxPayoutService.execute(
                 disbursement_id=d.pk, completed_by=self.manager, client=self.chain
             )
         d.refresh_from_db()
         self.assertEqual(d.status, Disbursement.Status.APPROVED)
-        self.assertFalse(SandboxTransfer.objects.filter(purpose="PAYOUT").exists())
+        self.assertFalse(SandboxTransfer.objects.filter(idempotency_key=f"DISBURSEMENT:{d.pk}").exists())
 
     def test_chain_outage_after_debit_reconciles_without_second_debit(self):
         d = self.propose_and_approve()
@@ -217,3 +224,76 @@ class SandboxPayoutTests(TestCase):
             )
         self.assertEqual(self.group_account().balance, Decimal("4000.00"))
         self.assertFalse(SandboxTransfer.objects.filter(purpose="PAYOUT").exists())
+
+@override_settings(
+    SANDBOX_PAYMENTS_ENABLED=True,
+    MOBILE_WALLET_WEBHOOK_ENABLED=True,
+    MOBILE_WALLET_WEBHOOK_SECRET="sandbox-hmac-test-key",
+)
+class SandboxWebhookIntegrationTests(TestCase):
+    """The signed HTTP callback mints fictitious test credits, never actual MZN."""
+
+    def setUp(self):
+        from django.urls import reverse
+        self.url = reverse("mobile-wallet-contribution-webhook")
+        self.user = User.objects.create_user(
+            phone_number="+258847560080", password="only-for-test"
+        )
+        self.group = Group.objects.create(name="Sandbox HTTP wallet")
+        self.settings = GroupSettings.objects.create(
+            group=self.group, version=1, is_active=True,
+            contribution_amount=Decimal("1000.00"), currency="MZN",
+            contribution_frequency=GroupSettings.ContributionFrequency.MONTHLY,
+            maximum_members=5,
+            rotation_strategy=GroupSettings.RotationStrategy.FIXED_ORDER,
+            requires_consensus=True, allow_manual_contributions=True,
+        )
+        self.member = GroupMember.objects.create(
+            group=self.group, user=self.user,
+            status=GroupMember.Status.ACTIVE, role=GroupMember.Role.MEMBER,
+        )
+
+    def signed_post(self, secret="sandbox-hmac-test-key"):
+        import hashlib
+        import hmac
+        import json
+        import time
+        payload = {
+            "group_id": str(self.group.pk),
+            "group_member_id": str(self.member.pk),
+            "amount": "1000.00", "currency": "MZN",
+            "contribution_period": "2026-11-01",
+            "reference": "SANDBOX-WEBHOOK-001",
+        }
+        raw = json.dumps(payload, separators=(",", ":")).encode()
+        timestamp = str(int(time.time()))
+        signature = hmac.new(
+            secret.encode(), timestamp.encode() + b"." + raw, hashlib.sha256
+        ).hexdigest()
+        return self.client.post(
+            self.url, raw, content_type="application/json",
+            HTTP_X_MONO_TIMESTAMP=timestamp,
+            HTTP_X_MONO_SIGNATURE=signature,
+        )
+
+    def test_signed_callback_credits_exactly_once(self):
+        first = self.signed_post()
+        assert first.status_code == 201
+        account = SandboxAccount.objects.get(
+            key=SandboxLedgerService.group_key(self.group.pk, "MZN")
+        )
+        self.assertEqual(account.balance, Decimal("1000.00"))
+        self.assertEqual(SandboxTransfer.objects.count(), 1)
+        self.assertEqual(SandboxEntry.objects.count(), 2)
+
+        replay = self.signed_post()
+        self.assertEqual(replay.status_code, 400)
+        account.refresh_from_db()
+        self.assertEqual(account.balance, Decimal("1000.00"))
+        self.assertEqual(SandboxTransfer.objects.count(), 1)
+
+    def test_invalid_signature_never_creates_fictitious_money(self):
+        invalid = self.signed_post(secret="not-the-provider-secret")
+        self.assertEqual(invalid.status_code, 403)
+        self.assertFalse(SandboxAccount.objects.exists())
+        self.assertFalse(SandboxTransfer.objects.exists())
